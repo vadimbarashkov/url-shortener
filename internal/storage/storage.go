@@ -11,7 +11,7 @@ var (
 )
 
 type URLStorage interface {
-	Set(ctx context.Context, alias, url string) error
+	Add(ctx context.Context, alias, url string) error
 	Get(ctx context.Context, alias string) (string, error)
 	Update(ctx context.Context, alias, url string) error
 	Delete(ctx context.Context, alias string) error

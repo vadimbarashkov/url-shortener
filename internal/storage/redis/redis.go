@@ -29,7 +29,7 @@ func NewURLStorage(client Client) storage.URLStorage {
 	}
 }
 
-func (s *urlStorage) Set(ctx context.Context, alias, url string) error {
+func (s *urlStorage) Add(ctx context.Context, alias, url string) error {
 	wasSet, err := s.client.SetNX(ctx, alias, url, 0).Result()
 	if err != nil {
 		return fmt.Errorf("urlStorage.Set: failed to setnx url: %w", err)
