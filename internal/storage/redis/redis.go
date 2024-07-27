@@ -10,7 +10,7 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/storage"
 )
 
-//go:generate mockgen -source=redis.go -destination=mocks/redis.go
+//go:generate mockgen -source=redis.go -destination=mock/redis.go
 type Client interface {
 	SetNX(ctx context.Context, key string, value any, expiration time.Duration) *redis.BoolCmd
 	Get(ctx context.Context, key string) *redis.StringCmd

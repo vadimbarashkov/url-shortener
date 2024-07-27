@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vadimbarashkov/url-shortener/internal/storage"
 	my_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis"
-	mock_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis/mocks"
+	mock_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis/mock"
 )
 
 var ErrUnknown = errors.New("unknown error")
