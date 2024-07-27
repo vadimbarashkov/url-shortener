@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/vadimbarashkov/url-shortener/internal/storage"
 	my_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis"
-	mock_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis/mocks"
+	mock_redis "github.com/vadimbarashkov/url-shortener/internal/storage/redis/mock"
 )
 
 var ErrUnknown = errors.New("unknown error")
@@ -32,7 +32,7 @@ func TestURLStorage_Set(t *testing.T) {
 			SetNX(context.Background(), alias, url, time.Duration(0)).
 			Return(redis.NewBoolResult(false, ErrUnknown))
 
-		err := urlStorage.Set(context.Background(), alias, url)
+		err := urlStorage.Add(context.Background(), alias, url)
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, ErrUnknown)
@@ -44,7 +44,7 @@ func TestURLStorage_Set(t *testing.T) {
 			SetNX(context.Background(), alias, url, time.Duration(0)).
 			Return(redis.NewBoolResult(false, nil))
 
-		err := urlStorage.Set(context.Background(), alias, url)
+		err := urlStorage.Add(context.Background(), alias, url)
 
 		assert.Error(t, err)
 		assert.ErrorIs(t, err, storage.ErrURLExists)
@@ -56,7 +56,7 @@ func TestURLStorage_Set(t *testing.T) {
 			SetNX(context.Background(), alias, url, time.Duration(0)).
 			Return(redis.NewBoolResult(true, nil))
 
-		err := urlStorage.Set(context.Background(), alias, url)
+		err := urlStorage.Add(context.Background(), alias, url)
 
 		assert.NoError(t, err)
 	})

@@ -10,7 +10,7 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/storage"
 )
 
-//go:generate mockgen -source=redis.go -destination=mocks/redis.go
+//go:generate mockgen -source=redis.go -destination=mock/redis.go
 type Client interface {
 	SetNX(ctx context.Context, key string, value any, expiration time.Duration) *redis.BoolCmd
 	Get(ctx context.Context, key string) *redis.StringCmd
@@ -29,7 +29,7 @@ func NewURLStorage(client Client) storage.URLStorage {
 	}
 }
 
-func (s *urlStorage) Set(ctx context.Context, alias, url string) error {
+func (s *urlStorage) Add(ctx context.Context, alias, url string) error {
 	wasSet, err := s.client.SetNX(ctx, alias, url, 0).Result()
 	if err != nil {
 		return fmt.Errorf("urlStorage.Set: failed to setnx url: %w", err)
