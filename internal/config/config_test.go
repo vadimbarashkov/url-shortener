@@ -56,7 +56,6 @@ server:
   read_timeout: 1s
   write_timeout: 2s
   idle_timeout: 60s
-  max_header_bytes: 1048576
 redis:
   password:
   host: localhost
@@ -70,11 +69,10 @@ redis:
 		expectedCfg := config.Config{
 			Env: "test",
 			Server: config.Server{
-				Port:           8080,
-				ReadTimeout:    time.Second,
-				WriteTimeout:   2 * time.Second,
-				IdleTimeout:    60 * time.Second,
-				MaxHeaderBytes: 1 << 20,
+				Port:         8080,
+				ReadTimeout:  time.Second,
+				WriteTimeout: 2 * time.Second,
+				IdleTimeout:  60 * time.Second,
 			},
 			Redis: config.Redis{
 				Password: "",
@@ -94,11 +92,10 @@ redis:
 
 func TestServer_Addr(t *testing.T) {
 	s := config.Server{
-		Port:           8080,
-		ReadTimeout:    time.Second,
-		WriteTimeout:   2 * time.Second,
-		IdleTimeout:    60 * time.Second,
-		MaxHeaderBytes: 1 << 20,
+		Port:         8080,
+		ReadTimeout:  time.Second,
+		WriteTimeout: 2 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
 	expectedAddr := ":8080"

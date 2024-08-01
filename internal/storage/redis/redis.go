@@ -30,9 +30,11 @@ func NewURLStorage(client Client) storage.URLStorage {
 }
 
 func (s *urlStorage) Add(ctx context.Context, alias, url string) error {
+	const op = "storage.redis.urlStorage.Add"
+
 	wasSet, err := s.client.SetNX(ctx, alias, url, 0).Result()
 	if err != nil {
-		return fmt.Errorf("urlStorage.Set: failed to setnx url: %w", err)
+		return fmt.Errorf("%s: failed to setnx url: %w", op, err)
 	}
 
 	if !wasSet {
@@ -43,22 +45,26 @@ func (s *urlStorage) Add(ctx context.Context, alias, url string) error {
 }
 
 func (s *urlStorage) Get(ctx context.Context, alias string) (string, error) {
+	const op = "storage.redis.urlStorage.Get"
+
 	url, err := s.client.Get(ctx, alias).Result()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return "", storage.ErrURLNotFound
 		}
 
-		return "", fmt.Errorf("urlStorage.Get: failed to get url: %w", err)
+		return "", fmt.Errorf("%s: failed to get url: %w", op, err)
 	}
 
 	return url, nil
 }
 
 func (s *urlStorage) Update(ctx context.Context, alias, url string) error {
+	const op = "storage.redis.urlStorage.Update"
+
 	exists, err := s.client.Exists(ctx, alias).Result()
 	if err != nil {
-		return fmt.Errorf("urlStorage.Update: failed to exists url: %w", err)
+		return fmt.Errorf("%s: failed to exists url: %w", op, err)
 	}
 
 	if exists == 0 {
@@ -67,16 +73,18 @@ func (s *urlStorage) Update(ctx context.Context, alias, url string) error {
 
 	err = s.client.Set(ctx, alias, url, 0).Err()
 	if err != nil {
-		return fmt.Errorf("urlStorage.Update: failed to set url: %w", err)
+		return fmt.Errorf("%s: failed to set url: %w", op, err)
 	}
 
 	return nil
 }
 
 func (s *urlStorage) Delete(ctx context.Context, alias string) error {
+	const op = "storage.redis.urlStorage.Delete"
+
 	deleted, err := s.client.Del(ctx, alias).Result()
 	if err != nil {
-		return fmt.Errorf("urlStorage.Delete: failed to delete url: %w", err)
+		return fmt.Errorf("%s: failed to delete url: %w", op, err)
 	}
 
 	if deleted == 0 {

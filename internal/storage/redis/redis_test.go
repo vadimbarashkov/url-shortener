@@ -26,7 +26,7 @@ func TestURLStorage_Set(t *testing.T) {
 	alias := "alias"
 	url := "http://example.com"
 
-	t.Run("return unknown error after setnx", func(t *testing.T) {
+	t.Run("return unknown error after SetNX", func(t *testing.T) {
 		client.
 			EXPECT().
 			SetNX(context.Background(), alias, url, time.Duration(0)).
@@ -85,7 +85,7 @@ func TestURLStorage_Get(t *testing.T) {
 		assert.ErrorIs(t, err, storage.ErrURLNotFound)
 	})
 
-	t.Run("return unknown error after get", func(t *testing.T) {
+	t.Run("return unknown error after Get", func(t *testing.T) {
 		client.
 			EXPECT().
 			Get(context.Background(), alias).
@@ -121,7 +121,7 @@ func TestURLStorage_Update(t *testing.T) {
 	alias := "alias"
 	url := "http://example.com"
 
-	t.Run("return unknown error after exists", func(t *testing.T) {
+	t.Run("return unknown error after Exists", func(t *testing.T) {
 		client.
 			EXPECT().
 			Exists(context.Background(), alias).
@@ -145,7 +145,7 @@ func TestURLStorage_Update(t *testing.T) {
 		assert.ErrorIs(t, err, storage.ErrURLNotFound)
 	})
 
-	t.Run("return unknown error after set", func(t *testing.T) {
+	t.Run("return unknown error after Set", func(t *testing.T) {
 		client.
 			EXPECT().
 			Exists(context.Background(), alias).
@@ -188,7 +188,7 @@ func TestURLStorage_Delete(t *testing.T) {
 
 	alias := "alias"
 
-	t.Run("return unknown error after del", func(t *testing.T) {
+	t.Run("return unknown error after Del", func(t *testing.T) {
 		client.
 			EXPECT().
 			Del(context.Background(), alias).
