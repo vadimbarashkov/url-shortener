@@ -9,9 +9,11 @@ import (
 )
 
 type Config struct {
-	Env    string `yaml:"env"`
-	Server `yaml:"server"`
-	Redis  `yaml:"redis"`
+	Env      string `yaml:"env"`
+	CertFile string `yaml:"cert_file"`
+	KeyFile  string `yaml:"key_file"`
+	Server   `yaml:"server"`
+	Redis    `yaml:"redis"`
 }
 
 func Load(path string) (*Config, error) {

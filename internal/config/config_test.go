@@ -51,11 +51,13 @@ func TestLoad(t *testing.T) {
 		defer os.Remove(f.Name())
 
 		data := `env: test
+cert_file: ./crts/name.pem
+key_file: ./crts/name-key.pem
 server:
   port: 8080
   read_timeout: 1s
   write_timeout: 2s
-  idle_timeout: 60s
+  idle_timeout: 1m
 redis:
   password:
   host: localhost
@@ -67,7 +69,9 @@ redis:
 		}
 
 		expectedCfg := config.Config{
-			Env: "test",
+			Env:      "test",
+			CertFile: "./crts/name.pem",
+			KeyFile:  "./crts/name-key.pem",
 			Server: config.Server{
 				Port:         8080,
 				ReadTimeout:  time.Second,
