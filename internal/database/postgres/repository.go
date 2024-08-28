@@ -125,3 +125,22 @@ func (r *URLRepository) Delete(ctx context.Context, shortCode string) error {
 
 	return nil
 }
+
+func (r *URLRepository) GetStats(ctx context.Context, shortCode string) (*models.URL, error) {
+	const op = "database.postgres.URLRepository.GetStats"
+
+	rec := new(urlRecord)
+	query := `SELECT * FROM urls
+		WHERE short_code = $1`
+
+	err := r.db.GetContext(ctx, rec, query, shortCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
+		}
+
+		return nil, fmt.Errorf("%s: failed to get url record: %w", op, err)
+	}
+
+	return rec.ToURL(), nil
+}
