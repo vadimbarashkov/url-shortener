@@ -39,6 +39,10 @@ type Server struct {
 	KeyFile      string        `env:"KEY_FILE"`
 }
 
+func (s *Server) Addr() string {
+	return fmt.Sprintf(":%d", s.Port)
+}
+
 type Postgres struct {
 	User     string `env:"USER" envDefault:"postgres"`
 	Password string `env:"PASSWORD"`
@@ -46,4 +50,9 @@ type Postgres struct {
 	Port     int    `env:"PORT" envDefault:"5432"`
 	DB       string `env:"DB"`
 	SSLMode  string `env:"SSLMODE" envDefault:"disable"`
+}
+
+func (p *Postgres) DSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		p.User, p.Password, p.Host, p.Port, p.DB, p.SSLMode)
 }
