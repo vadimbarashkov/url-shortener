@@ -148,3 +148,58 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
+
+func TestURLRepository_Update(t *testing.T) {
+	t.Run("url not found", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "code2").
+			WillReturnError(sql.ErrNoRows)
+
+		url, err := repo.Update(context.TODO(), "code2", "https://new-example.com")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrURLNotFound)
+		assert.Nil(t, url)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("unknown error", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "code1").
+			WillReturnError(errUnknown)
+
+		url, err := repo.Update(context.TODO(), "code1", "https://new-example.com")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, errUnknown)
+		assert.Nil(t, url)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("success", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		rows := sqlmock.NewRows(columns).
+			AddRow(0, "code1", "https://new-example.com", 0, time.Time{}, time.Time{})
+
+		mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "code1").
+			WillReturnRows(rows)
+
+		wantURL := models.URL{
+			ShortCode:   "code1",
+			OriginalURL: "https://new-example.com",
+		}
+
+		url, err := repo.Update(context.TODO(), "code1", "https://new-example.com")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, wantURL, *url)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
