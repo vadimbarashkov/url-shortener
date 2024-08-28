@@ -8,12 +8,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// Config represents the project configuration.
 type Config struct {
 	Env      string `env:"ENV" envDefault:"dev"`
 	Server   `envPrefix:"SERVER_"`
 	Postgres `envPrefix:"POSTGRES_"`
 }
 
+// Load loads the project configuration from the specified .env file path.
+// It returns a pointer to Config struct or an error.
 func Load(path string) (*Config, error) {
 	const op = "config.Load"
 
@@ -30,6 +33,7 @@ func Load(path string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Server represents the server configuration.
 type Server struct {
 	Port         int           `env:"PORT" envDefault:"8443"`
 	ReadTimeout  time.Duration `env:"READ_TIMEOUT" envDefault:"1s"`
@@ -39,10 +43,12 @@ type Server struct {
 	KeyFile      string        `env:"KEY_FILE"`
 }
 
+// Addr returns the server address in the format ":<port>".
 func (s *Server) Addr() string {
 	return fmt.Sprintf(":%d", s.Port)
 }
 
+// Postgres represents the PostgreSQL configuration.
 type Postgres struct {
 	User     string `env:"USER" envDefault:"postgres"`
 	Password string `env:"PASSWORD"`
@@ -52,6 +58,7 @@ type Postgres struct {
 	SSLMode  string `env:"SSLMODE" envDefault:"disable"`
 }
 
+// DSN returns the Data Source Name (DSN) for connecting to the PostgreSQL.
 func (p *Postgres) DSN() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		p.User, p.Password, p.Host, p.Port, p.DB, p.SSLMode)
