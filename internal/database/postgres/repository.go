@@ -102,3 +102,26 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 
 	return rec.ToURL(), nil
 }
+
+func (r *URLRepository) Delete(ctx context.Context, shortCode string) error {
+	const op = "database.postgres.URLRepository.Delete"
+
+	query := `DELETE FROM urls
+		WHERE short_code = $1`
+
+	res, err := r.db.ExecContext(ctx, query, shortCode)
+	if err != nil {
+		return fmt.Errorf("%s: failed to delete url record: %w", op, err)
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("%s: failed to get number of affected rows: %w", op, err)
+	}
+
+	if rowsAffected != 1 {
+		return fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
+	}
+
+	return nil
+}
