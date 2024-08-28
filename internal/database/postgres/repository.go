@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -51,10 +52,31 @@ func (r *URLRepository) Create(ctx context.Context, shortCode, originalURL strin
 	err := r.db.GetContext(ctx, rec, query, shortCode, originalURL)
 	if err != nil {
 		if isUniqueViolationError(err) {
-			return nil, database.ErrShortCodeExists
+			return nil, fmt.Errorf("%s: %w", op, database.ErrShortCodeExists)
 		}
 
 		return nil, fmt.Errorf("%s: failed to create url record: %w", op, err)
+	}
+
+	return rec.ToURL(), nil
+}
+
+func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*models.URL, error) {
+	const op = "database.postgres.URLRepository.GetByShortCode"
+
+	rec := new(urlRecord)
+	query := `UPDATE urls
+		SET access_count = access_count + 1
+		WHERE short_code = $1
+		RETURNING *`
+
+	err := r.db.GetContext(ctx, rec, query, shortCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
+		}
+
+		return nil, fmt.Errorf("%s: failed to get url record: %w", op, err)
 	}
 
 	return rec.ToURL(), nil
