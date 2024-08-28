@@ -15,7 +15,10 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
 
-var errUnknown = errors.New("unknown error")
+var (
+	errUnknown      = errors.New("unknown error")
+	errAffectedRows = errors.New("affected rows error")
+)
 
 var columns = []string{"id", "short_code", "original_url", "access_count", "created_at", "updated_at"}
 
@@ -200,6 +203,63 @@ func TestURLRepository_Update(t *testing.T) {
 		assert.NoError(t, err)
 		assert.NotNil(t, url)
 		assert.Equal(t, wantURL, *url)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+}
+
+func TestURLRepository_Delete(t *testing.T) {
+	t.Run("unknown error", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("code1").
+			WillReturnError(errUnknown)
+
+		err := repo.Delete(context.TODO(), "code1")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, errUnknown)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("rows affected error", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("code1").
+			WillReturnResult(sqlmock.NewErrorResult(errAffectedRows))
+
+		err := repo.Delete(context.TODO(), "code1")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, errAffectedRows)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("url not found", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("code2").
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.Delete(context.TODO(), "code2")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrURLNotFound)
+		assert.NoError(t, mock.ExpectationsWereMet())
+	})
+
+	t.Run("success", func(t *testing.T) {
+		repo, mock := setupURLRepository(t)
+
+		mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("code1").
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.Delete(context.TODO(), "code1")
+
+		assert.NoError(t, err)
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
 }
