@@ -111,3 +111,11 @@ POSTGRES_SSLMODE=disable`
 		assert.Equal(t, wantCfg, *cfg)
 	})
 }
+
+func TestServer_Addr(t *testing.T) {
+	s := Server{Port: 8443}
+
+	wantAddr := ":8443"
+
+	assert.Equal(t, wantAddr, s.Addr())
+}
