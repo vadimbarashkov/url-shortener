@@ -81,3 +81,24 @@ func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*
 
 	return rec.ToURL(), nil
 }
+
+func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL string) (*models.URL, error) {
+	const op = "database.postgres.URLRepository.Update"
+
+	rec := new(urlRecord)
+	query := `UPDATE urls
+		SET original_url = $1
+		WHERE short_code = $2
+		RETURNING *`
+
+	err := r.db.GetContext(ctx, rec, query, originalURL, shortCode)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
+		}
+
+		return nil, fmt.Errorf("%s: failed to update url record: %w", op, err)
+	}
+
+	return rec.ToURL(), nil
+}
