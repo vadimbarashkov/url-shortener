@@ -41,7 +41,7 @@ func NewURLRepository(db *sqlx.DB) *URLRepository {
 }
 
 func (r *URLRepository) Create(ctx context.Context, shortCode, originalURL string) (*models.URL, error) {
-	const op = "db.postgres.URLRepository.Create"
+	const op = "database.postgres.URLRepository.Create"
 
 	rec := new(urlRecord)
 	query := `INSERT INTO urls(short_code, original_url)

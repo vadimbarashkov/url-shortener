@@ -17,7 +17,7 @@ func isUniqueViolationError(err error) bool {
 }
 
 func New(dsn string) (*sqlx.DB, error) {
-	const op = "db.postgres.New"
+	const op = "database.postgres.New"
 
 	db, err := sqlx.Connect("pgx", dsn)
 	if err != nil {
