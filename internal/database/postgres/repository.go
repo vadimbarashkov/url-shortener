@@ -11,6 +11,8 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
 
+// urlRecord represetns the internal structure of a URL record stored in the database.
+// It is used internally within the repository to map database columns to Go struct fields.
 type urlRecord struct {
 	ID          int64     `db:"id"`
 	ShortCode   string    `db:"short_code"`
@@ -20,6 +22,8 @@ type urlRecord struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
+// toURL converts a urlRecord struct to a models.URL struct. This is used to transform
+// data from the database format to the business layer format.
 func (r *urlRecord) ToURL() *models.URL {
 	return &models.URL{
 		ID:          r.ID,
@@ -31,16 +35,23 @@ func (r *urlRecord) ToURL() *models.URL {
 	}
 }
 
+// URLRepository provides methods for interacting with URL records in the database.
+// It is responsible for CRUD operations on the 'urls' table.
 type URLRepository struct {
 	db *sqlx.DB
 }
 
+// NewURLRepository creates a new instance of URLRepository. It requires a sqlx.DB object
+// representing the database connection.
 func NewURLRepository(db *sqlx.DB) *URLRepository {
 	return &URLRepository{
 		db: db,
 	}
 }
 
+// Create inserts a new URL record into the database with the specified short code and original url.
+// If the short code already exists, it returns a database.ErrShortCodeExists error. On success, it
+// returns the newly created models.URL object.
 func (r *URLRepository) Create(ctx context.Context, shortCode, originalURL string) (*models.URL, error) {
 	const op = "database.postgres.URLRepository.Create"
 
@@ -61,6 +72,9 @@ func (r *URLRepository) Create(ctx context.Context, shortCode, originalURL strin
 	return rec.ToURL(), nil
 }
 
+// GetByShortCode retrieves a URL record from the database by its short code. It increments the
+// access_count value for the record and returns the corresponding models.URL object. If no
+// record is found, it returns a database.ErrURLNotFound error.
 func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*models.URL, error) {
 	const op = "database.postgres.URLRepository.GetByShortCode"
 
@@ -82,6 +96,8 @@ func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*
 	return rec.ToURL(), nil
 }
 
+// Update modifies the URL associated with the given short code. If the alias doesn't exist, it
+// returns a database.ErrURLNotFound error. On success, it returns the updated models.URL object.
 func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL string) (*models.URL, error) {
 	const op = "database.postgres.URLRepository.Update"
 
@@ -103,6 +119,8 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 	return rec.ToURL(), nil
 }
 
+// Delete removes a URL record from the database by its short code. If the short code doesn't
+// exist, it returns a database.ErrURLNotFound error. On success, it returns nil.
 func (r *URLRepository) Delete(ctx context.Context, shortCode string) error {
 	const op = "database.postgres.URLRepository.Delete"
 
@@ -126,6 +144,9 @@ func (r *URLRepository) Delete(ctx context.Context, shortCode string) error {
 	return nil
 }
 
+// GetStats retrieves a URL record from the database by its short code. It doesn't change the
+// URL record, but only returns the corresponding models.URL object. If no record is found, it
+// returns a database.ErrURLNotFound error.
 func (r *URLRepository) GetStats(ctx context.Context, shortCode string) (*models.URL, error) {
 	const op = "database.postgres.URLRepository.GetStats"
 
