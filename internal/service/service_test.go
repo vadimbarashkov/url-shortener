@@ -238,3 +238,47 @@ func TestURLService_DeactivateURL(t *testing.T) {
 		mockRepo.AssertNumberOfCalls(t, "Delete", 1)
 	})
 }
+
+func TestURLService_GetURLStats(t *testing.T) {
+	t.Run("unknown error", func(t *testing.T) {
+		svc, mockRepo := setupURLSerive(t, 8)
+
+		mockRepo.On("GetStats", context.TODO(), mock.Anything).
+			Times(1).
+			Return(nil, errUnknown)
+
+		url, err := svc.GetURLStats(context.TODO(), mock.Anything)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, errUnknown)
+		assert.Nil(t, url)
+		mockRepo.AssertExpectations(t)
+		mockRepo.AssertNumberOfCalls(t, "GetStats", 1)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc, mockRepo := setupURLSerive(t, 8)
+
+		mockRepo.On("GetStats", context.TODO(), mock.Anything).
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   mock.Anything,
+				OriginalURL: "https://example.com",
+				AccessCount: 1,
+			}, nil)
+
+		wantURL := models.URL{
+			ShortCode:   mock.Anything,
+			OriginalURL: "https://example.com",
+			AccessCount: 1,
+		}
+
+		url, err := svc.GetURLStats(context.TODO(), mock.Anything)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, wantURL, *url)
+		mockRepo.AssertExpectations(t)
+		mockRepo.AssertNumberOfCalls(t, "GetStats", 1)
+	})
+}
