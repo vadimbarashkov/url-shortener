@@ -46,7 +46,7 @@ func TestURLRepository_Create(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("code1", "https://example.com").
 			WillReturnError(&pgconn.PgError{Code: uniqueViolationErrCode})
 
 		url, err := repo.Create(context.TODO(), "code1", "https://example.com")
@@ -61,7 +61,7 @@ func TestURLRepository_Create(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("code1", "https://example.com").
 			WillReturnError(errUnknown)
 
 		url, err := repo.Create(context.TODO(), "code1", "https://example.com")
@@ -79,7 +79,7 @@ func TestURLRepository_Create(t *testing.T) {
 			AddRow(0, "code1", "https://example.com", 0, time.Time{}, time.Time{})
 
 		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("code1", "https://example.com").
 			WillReturnRows(rows)
 
 		wantURL := models.URL{
@@ -101,7 +101,7 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code2").
 			WillReturnError(sql.ErrNoRows)
 
 		url, err := repo.GetByShortCode(context.TODO(), "code2")
@@ -116,7 +116,7 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnError(errUnknown)
 
 		url, err := repo.GetByShortCode(context.TODO(), "code1")
@@ -134,7 +134,7 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 			AddRow(0, "code1", "https://example.com", 1, time.Time{}, time.Time{})
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnRows(rows)
 
 		wantURL := models.URL{
@@ -157,7 +157,7 @@ func TestURLRepository_Update(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("https://new-example.com", "code2").
 			WillReturnError(sql.ErrNoRows)
 
 		url, err := repo.Update(context.TODO(), "code2", "https://new-example.com")
@@ -172,7 +172,7 @@ func TestURLRepository_Update(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("https://new-example.com", "code1").
 			WillReturnError(errUnknown)
 
 		url, err := repo.Update(context.TODO(), "code1", "https://new-example.com")
@@ -190,7 +190,7 @@ func TestURLRepository_Update(t *testing.T) {
 			AddRow(0, "code1", "https://new-example.com", 0, time.Time{}, time.Time{})
 
 		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs("https://new-example.com", "code1").
 			WillReturnRows(rows)
 
 		wantURL := models.URL{
@@ -212,7 +212,7 @@ func TestURLRepository_Delete(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnError(errUnknown)
 
 		err := repo.Delete(context.TODO(), "code1")
@@ -226,7 +226,7 @@ func TestURLRepository_Delete(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnResult(sqlmock.NewErrorResult(errAffectedRows))
 
 		err := repo.Delete(context.TODO(), "code1")
@@ -240,7 +240,7 @@ func TestURLRepository_Delete(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code2").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
 		err := repo.Delete(context.TODO(), "code2")
@@ -269,7 +269,7 @@ func TestURLRepository_GetStats(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code2").
 			WillReturnError(sql.ErrNoRows)
 
 		url, err := repo.GetStats(context.TODO(), "code2")
@@ -284,7 +284,7 @@ func TestURLRepository_GetStats(t *testing.T) {
 		repo, mock := setupURLRepository(t)
 
 		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnError(errUnknown)
 
 		url, err := repo.GetStats(context.TODO(), "code1")
@@ -302,7 +302,7 @@ func TestURLRepository_GetStats(t *testing.T) {
 			AddRow(0, "code1", "https://example.com", 1, time.Time{}, time.Time{})
 
 		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs(sqlmock.AnyArg()).
+			WithArgs("code1").
 			WillReturnRows(rows)
 
 		wantURL := models.URL{
