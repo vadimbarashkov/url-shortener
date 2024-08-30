@@ -79,3 +79,14 @@ func (s *URLService) ModifyURL(ctx context.Context, shortCode, originalURL strin
 
 	return url, nil
 }
+
+func (s *URLService) DeactivateURL(ctx context.Context, shortCode string) error {
+	const op = "service.URLService.DeactivateURL"
+
+	err := s.repo.Delete(ctx, shortCode)
+	if err != nil {
+		return fmt.Errorf("%s: failed to deactivate url: %w", op, err)
+	}
+
+	return nil
+}
