@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -86,7 +87,7 @@ func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*
 
 	err := r.db.GetContext(ctx, rec, query, shortCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
 		}
 
@@ -109,7 +110,7 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 
 	err := r.db.GetContext(ctx, rec, query, originalURL, shortCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
 		}
 
@@ -156,7 +157,7 @@ func (r *URLRepository) GetStats(ctx context.Context, shortCode string) (*models
 
 	err := r.db.GetContext(ctx, rec, query, shortCode)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", op, database.ErrURLNotFound)
 		}
 
