@@ -90,3 +90,14 @@ func (s *URLService) DeactivateURL(ctx context.Context, shortCode string) error 
 
 	return nil
 }
+
+func (s *URLService) GetURLStats(ctx context.Context, shortCode string) (*models.URL, error) {
+	const op = "service.URLService.GetURLStats"
+
+	url, err := s.repo.GetStats(ctx, shortCode)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to get url stats: %w", op, err)
+	}
+
+	return url, nil
+}
