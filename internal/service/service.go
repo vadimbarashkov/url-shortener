@@ -68,3 +68,14 @@ func (s *URLService) ResolveShortCode(ctx context.Context, shortCode string) (*m
 
 	return url, nil
 }
+
+func (s *URLService) ModifyURL(ctx context.Context, shortCode, originalURL string) (*models.URL, error) {
+	const op = "service.URLService.ModifyURL"
+
+	url, err := s.repo.Update(ctx, shortCode, originalURL)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to modify url: %w", op, err)
+	}
+
+	return url, nil
+}
