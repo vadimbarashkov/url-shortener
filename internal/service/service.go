@@ -57,3 +57,14 @@ func (s *URLService) ShortenURL(ctx context.Context, originalURL string) (*model
 
 	return nil, fmt.Errorf("%s: %w", op, ErrMaxRetriesExceeded)
 }
+
+func (s *URLService) ResolveShortCode(ctx context.Context, shortCode string) (*models.URL, error) {
+	const op = "service.URLService.ResolveShortCode"
+
+	url, err := s.repo.GetByShortCode(ctx, shortCode)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed to resolve short code: %w", op, err)
+	}
+
+	return url, nil
+}
