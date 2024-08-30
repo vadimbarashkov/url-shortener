@@ -46,6 +46,11 @@ func (s *URLService) ShortenURL(ctx context.Context, originalURL string) (*model
 		url, err := s.repo.Create(ctx, shortCode, originalURL)
 		if err != nil {
 			if errors.Is(err, database.ErrShortCodeExists) {
+				s.shortCodeLength++
+				defer func() {
+					s.shortCodeLength--
+				}()
+
 				continue
 			}
 
