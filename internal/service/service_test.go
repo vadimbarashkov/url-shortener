@@ -165,3 +165,45 @@ func TestURLService_ResolveShortCode(t *testing.T) {
 		mockRepo.AssertNumberOfCalls(t, "GetByShortCode", 1)
 	})
 }
+
+func TestURLService_ModifyURL(t *testing.T) {
+	t.Run("unknown error", func(t *testing.T) {
+		svc, mockRepo := setupURLSerive(t, 8)
+
+		mockRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil, errUnknown)
+
+		url, err := svc.ModifyURL(context.TODO(), mock.Anything, "https://new-example.com")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, errUnknown)
+		assert.Nil(t, url)
+		mockRepo.AssertExpectations(t)
+		mockRepo.AssertNumberOfCalls(t, "Update", 1)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		svc, mockRepo := setupURLSerive(t, 8)
+
+		mockRepo.On("Update", mock.Anything, mock.Anything, mock.Anything).
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   mock.Anything,
+				OriginalURL: "https://new-example.com",
+			}, nil)
+
+		wantURL := models.URL{
+			ShortCode:   mock.Anything,
+			OriginalURL: "https://new-example.com",
+		}
+
+		url, err := svc.ModifyURL(context.TODO(), mock.Anything, "https://new-example.com")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, wantURL, *url)
+		mockRepo.AssertExpectations(t)
+		mockRepo.AssertNumberOfCalls(t, "Update", 1)
+	})
+}
