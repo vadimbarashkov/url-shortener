@@ -1,20 +1,15 @@
 package http
 
 import (
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/vadimbarashkov/url-shortener/internal/service"
+	"context"
+
+	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
 
-func NewRouter(svc *service.URLService) *chi.Mux {
-	router := chi.NewRouter()
-
-	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
-
-	router.Get("/ping", Ping)
-
-	return router
+type URLService interface {
+	ShortenURL(ctx context.Context, originalURL string) (*models.URL, error)
+	ResolveShortCode(ctx context.Context, shortCode string) (*models.URL, error)
+	ModifyURL(ctx context.Context, shortCode, originalURL string) (*models.URL, error)
+	DeactivateURL(ctx context.Context, shortCode string) error
+	GetURLStats(ctx context.Context, shortCode string) (*models.URL, error)
 }
