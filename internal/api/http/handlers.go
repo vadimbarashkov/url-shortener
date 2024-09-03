@@ -93,12 +93,66 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shortCode := r.PathValue("shortCode")
-		if shortCode == "" {
+
+		url, err := svc.ResolveShortCode(r.Context(), shortCode)
+		if err != nil {
+			if errors.Is(err, database.ErrURLNotFound) {
+				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			}
+
+			logger.Error(
+				"failed to resolve short code",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		resp := toResponse(url)
+
+		if err := render.JSON(w, http.StatusOK, resp); err != nil {
+			logger.Error(
+				"failed to render JSON response",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	})
+}
+
+func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
+	const op = "api.http.handleModifyURL"
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		shortCode := r.PathValue("shortCode")
+
+		var req request
+
+		if err := render.BindJSON(r, &req); err != nil {
+			if errors.Is(err, io.EOF) {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+
+			logger.Error(
+				"failed to parse JSON from request body",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		if err := validate.Struct(req); err != nil {
 			http.Error(w, "Bad Request", http.StatusBadRequest)
 			return
 		}
 
-		url, err := svc.ResolveShortCode(r.Context(), shortCode)
+		url, err := svc.ModifyURL(r.Context(), shortCode, req.URL)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
 				http.Error(w, "Not Found", http.StatusNotFound)
