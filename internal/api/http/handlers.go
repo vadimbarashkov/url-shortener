@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
+	"github.com/vadimbarashkov/url-shortener/internal/database"
+	"github.com/vadimbarashkov/url-shortener/internal/models"
 	"github.com/vadimbarashkov/url-shortener/pkg/render"
 )
 
@@ -23,6 +25,16 @@ type response struct {
 	URL       string    `json:"url"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func toResponse(url *models.URL) response {
+	return response{
+		ID:        url.ID,
+		ShortCode: url.ShortCode,
+		URL:       url.OriginalURL,
+		CreatedAt: url.CreatedAt,
+		UpdatedAt: url.UpdatedAt,
+	}
 }
 
 func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
@@ -62,15 +74,49 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := response{
-			ID:        url.ID,
-			ShortCode: url.ShortCode,
-			URL:       url.OriginalURL,
-			CreatedAt: url.CreatedAt,
-			UpdatedAt: url.UpdatedAt,
-		}
+		resp := toResponse(url)
 
 		if err := render.JSON(w, http.StatusCreated, resp); err != nil {
+			logger.Error(
+				"failed to render JSON response",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+	})
+}
+
+func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
+	const op = "api.http.handleResolveShortCode"
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		shortCode := r.PathValue("shortCode")
+		if shortCode == "" {
+			http.Error(w, "Bad Request", http.StatusBadRequest)
+			return
+		}
+
+		url, err := svc.ResolveShortCode(r.Context(), shortCode)
+		if err != nil {
+			if errors.Is(err, database.ErrURLNotFound) {
+				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			}
+
+			logger.Error(
+				"failed to resolve short code",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		resp := toResponse(url)
+
+		if err := render.JSON(w, http.StatusOK, resp); err != nil {
 			logger.Error(
 				"failed to render JSON response",
 				slog.Group(op, slog.Any("err", err)),

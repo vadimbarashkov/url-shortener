@@ -20,6 +20,7 @@ func NewRouter(logger *slog.Logger, urlSvc URLService) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.Handle("POST /shorten", handleShortenURL(logger, urlSvc))
+	mux.Handle("GET /shorten/{shortCode}", handleResolveShortCode(logger, urlSvc))
 
 	return mux
 }
