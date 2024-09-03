@@ -181,3 +181,29 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 		}
 	})
 }
+
+func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
+	const op = "api.http.handleDeactivateURL"
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		shortCode := r.PathValue("shortCode")
+
+		err := svc.DeactivateURL(r.Context(), shortCode)
+		if err != nil {
+			if errors.Is(err, database.ErrURLNotFound) {
+				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			}
+
+			logger.Error(
+				"failed to resolve short code",
+				slog.Group(op, slog.Any("err", err)),
+			)
+
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
