@@ -13,4 +13,6 @@
 
 !/.github/**
 
+!/migrations/*
+
 !*/
