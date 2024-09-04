@@ -20,11 +20,12 @@ type request struct {
 }
 
 type response struct {
-	ID        int64     `json:"id"`
-	ShortCode string    `json:"short_code"`
-	URL       string    `json:"url"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          int64     `json:"id"`
+	ShortCode   string    `json:"short_code"`
+	URL         string    `json:"url"`
+	AccessCount *int64    `json:"access_count,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
 func toResponse(url *models.URL) response {
@@ -211,15 +212,6 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 	const op = "api.http.handleGetURLStats"
 
-	type response struct {
-		ID          int64     `json:"id"`
-		ShortCode   string    `json:"short_code"`
-		URL         string    `json:"url"`
-		AccessCount int64     `json:"access_count"`
-		CreatedAt   time.Time `json:"created_at"`
-		UpdatedAt   time.Time `json:"updated_at"`
-	}
-
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shortCode := r.PathValue("shortCode")
 
@@ -239,14 +231,8 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := response{
-			ID:          url.ID,
-			ShortCode:   url.ShortCode,
-			URL:         url.OriginalURL,
-			AccessCount: url.AccessCount,
-			CreatedAt:   url.CreatedAt,
-			UpdatedAt:   url.UpdatedAt,
-		}
+		resp := toResponse(url)
+		resp.AccessCount = &url.AccessCount
 
 		if err := render.JSON(w, http.StatusOK, resp); err != nil {
 			logger.Error(
