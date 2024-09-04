@@ -45,16 +45,10 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Install linters
-        run: |
-          go install honnef.co/go/tools/cmd/staticcheck@latest
-          go install golang.org/x/lint/golint@latest
-
-      - name: Run staticcheck
-        run: staticcheck ./...
-
-      - name: Run golint
-        run: golint ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
 
   test:
     strategy:
