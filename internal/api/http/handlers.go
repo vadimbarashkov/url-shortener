@@ -48,7 +48,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 
 		if err := render.BindJSON(r, &req); err != nil {
 			if errors.Is(err, io.EOF) {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				render.JSON(w, http.StatusBadRequest, stdresp.EmptyRequestBodyResponse)
 				return
 			}
 
@@ -57,7 +57,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -73,7 +73,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -93,7 +93,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 		url, err := svc.ResolveShortCode(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				http.Error(w, "Not Found", http.StatusNotFound)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
 				return
 			}
 
@@ -102,7 +102,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -123,7 +123,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 
 		if err := render.BindJSON(r, &req); err != nil {
 			if errors.Is(err, io.EOF) {
-				http.Error(w, "Bad Request", http.StatusBadRequest)
+				render.JSON(w, http.StatusBadRequest, stdresp.EmptyRequestBodyResponse)
 				return
 			}
 
@@ -132,7 +132,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -144,7 +144,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 		url, err := svc.ModifyURL(r.Context(), shortCode, req.URL)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				http.Error(w, "Not Found", http.StatusNotFound)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
 				return
 			}
 
@@ -153,7 +153,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -173,7 +173,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 		err := svc.DeactivateURL(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				http.Error(w, "Not Found", http.StatusNotFound)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
 				return
 			}
 
@@ -182,7 +182,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
@@ -201,16 +201,16 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 		url, err := svc.GetURLStats(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				http.Error(w, "Not Found", http.StatusNotFound)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
 				return
 			}
 
 			logger.Error(
-				"failed to get url stats",
+				"failed to get jurl stats",
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
 			return
 		}
 
