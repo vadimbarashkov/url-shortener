@@ -1,6 +1,6 @@
 package response
 
-import "net/http"
+import "github.com/go-playground/validator/v10"
 
 const (
 	StatusSuccess = "success"
@@ -8,45 +8,78 @@ const (
 )
 
 var EmptyRequestBodyResponse = Response{
-	Status:     StatusError,
-	StatusCode: http.StatusBadRequest,
-	Error:      "Empty Request Body",
-	Message:    "Request body is empty. Please provide necessary data.",
+	Status:  StatusError,
+	Message: "Request body is empty. Please provide necessary data.",
 }
 
-var ResourseNotFoundResponse = Response{
-	Status:     StatusError,
-	StatusCode: http.StatusNotFound,
-	Error:      "Resourse Not Found",
-	Message:    "The requested resource was not found.",
+var ResourceNotFoundResponse = Response{
+	Status:  StatusError,
+	Message: "The requested resource was not found.",
 }
 
 var ServerErrorResponse = Response{
-	Status:     StatusError,
-	StatusCode: http.StatusInternalServerError,
-	Error:      "Server Error",
-	Message:    "An internal server error occurred. Please try again later.",
+	Status:  StatusError,
+	Message: "An internal server error occurred. Please try again later.",
 }
 
 type Response struct {
-	Status     string `json:"status"`
-	StatusCode int    `json:"status_code"`
-	Error      string `json:"error,omitempty"`
-	Message    string `json:"message"`
-	Details    []any  `json:"details,omitempty"`
-	Data       any    `json:"data,omitempty"`
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
+	Data    any    `json:"data,omitempty"`
 }
 
-func SuccessResponse(statusCode int, msg string, data ...any) Response {
+func SuccessResponse(msg string, data ...any) Response {
 	resp := Response{
-		Status:     StatusSuccess,
-		StatusCode: statusCode,
-		Message:    msg,
+		Status:  StatusSuccess,
+		Message: msg,
 	}
 
-	if len(data) > 0 {
+	if len(data) > 0 && data[0] != nil {
 		resp.Data = data[0]
 	}
 
 	return resp
+}
+
+func ValidationErrorResponse(err error) Response {
+	return Response{
+		Status:  StatusError,
+		Message: "Invalid request body. Please check your input.",
+		Details: getValidationErrors(err),
+	}
+}
+
+type validationError struct {
+	Field string `json:"field"`
+	Value any    `json:"value"`
+	Issue string `json:"issue"`
+}
+
+func issueForTag(tag string) string {
+	switch tag {
+	case "required":
+		return "This field is required."
+	case "url":
+		return "Invalid url."
+	default:
+		return ""
+	}
+}
+
+func getValidationErrors(err error) []validationError {
+	var validationErrs []validationError
+
+	errs, ok := err.(validator.ValidationErrors)
+	if ok {
+		for _, e := range errs {
+			validationErrs = append(validationErrs, validationError{
+				Field: e.Field(),
+				Value: e.Value(),
+				Issue: issueForTag(e.Tag()),
+			})
+		}
+	}
+
+	return validationErrs
 }
