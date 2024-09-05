@@ -16,15 +16,11 @@ func BindJSON(r *http.Request, v any) error {
 	return nil
 }
 
-func JSON(w http.ResponseWriter, statusCode int, v any) error {
-	const op = "render.JSON"
-
+func JSON(w http.ResponseWriter, statusCode int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
 	if err := json.NewEncoder(w).Encode(v); err != nil {
-		return fmt.Errorf("%s: failed to encode v: %w", op, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-
-	return nil
 }
