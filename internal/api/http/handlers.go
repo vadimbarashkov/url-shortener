@@ -70,7 +70,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 		if err != nil {
 			logger.Error(
 				"failed to shorten url",
-				slog.Group(op, slog.Any("err", err)),
+				slog.Group(op, slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -99,7 +99,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 
 			logger.Error(
 				"failed to resolve short code",
-				slog.Group(op, slog.Any("err", err)),
+				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -150,7 +150,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 
 			logger.Error(
 				"failed to modify url",
-				slog.Group(op, slog.Any("err", err)),
+				slog.Group(op, slog.String("short_code", shortCode), slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -179,7 +179,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 
 			logger.Error(
 				"failed to deactivate url",
-				slog.Group(op, slog.Any("err", err)),
+				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
@@ -207,7 +207,7 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 
 			logger.Error(
 				"failed to get url stats",
-				slog.Group(op, slog.Any("err", err)),
+				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
