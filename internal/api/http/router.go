@@ -4,7 +4,10 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"reflect"
+	"strings"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
 
@@ -17,13 +20,28 @@ type URLService interface {
 }
 
 func NewRouter(logger *slog.Logger, urlSvc URLService) *http.ServeMux {
+	validate := getValidate()
 	mux := http.NewServeMux()
 
-	mux.Handle("POST /shorten", handleShortenURL(logger, urlSvc))
+	mux.Handle("POST /shorten", handleShortenURL(logger, urlSvc, validate))
 	mux.Handle("GET /shorten/{shortCode}", handleResolveShortCode(logger, urlSvc))
-	mux.Handle("PUT /shorten/{shortCode}", handleModifyURL(logger, urlSvc))
+	mux.Handle("PUT /shorten/{shortCode}", handleModifyURL(logger, urlSvc, validate))
 	mux.Handle("DELETE /shorten/{shortCode}", handleDeactivateURL(logger, urlSvc))
 	mux.Handle("GET /shorten/{shortCode}/stats", handleGetURLStats(logger, urlSvc))
 
 	return mux
+}
+
+func getValidate() *validator.Validate {
+	validate := validator.New()
+
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+
+	return validate
 }

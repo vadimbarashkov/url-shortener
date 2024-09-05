@@ -15,23 +15,21 @@ import (
 	stdresp "github.com/vadimbarashkov/url-shortener/pkg/response"
 )
 
-var validate = validator.New()
-
-type request struct {
+type urlRequest struct {
 	URL string `json:"url" validate:"required,url"`
 }
 
-type response struct {
+type urlResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
 	URL         string    `json:"url"`
-	AccessCount *int64    `json:"access_count,omitempty"`
+	AccessCount int64     `json:"access_count,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-func toResponse(url *models.URL) response {
-	return response{
+func toURLResponse(url *models.URL) urlResponse {
+	return urlResponse{
 		ID:        url.ID,
 		ShortCode: url.ShortCode,
 		URL:       url.OriginalURL,
@@ -40,11 +38,11 @@ func toResponse(url *models.URL) response {
 	}
 }
 
-func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
+func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.Handler {
 	const op = "api.http.handleShortenURL"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req request
+		var req urlRequest
 
 		if err := render.BindJSON(r, &req); err != nil {
 			if errors.Is(err, io.EOF) {
@@ -62,7 +60,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 		}
 
 		if err := validate.Struct(req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			render.JSON(w, http.StatusBadRequest, stdresp.ValidationErrorResponse(err))
 			return
 		}
 
@@ -77,8 +75,8 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		data := toResponse(url)
-		resp := stdresp.SuccessResponse(http.StatusCreated, "The URL has been shortened successfully.", data)
+		data := toURLResponse(url)
+		resp := stdresp.SuccessResponse("The URL has been shortened successfully.", data)
 
 		render.JSON(w, http.StatusCreated, resp)
 	})
@@ -93,7 +91,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 		url, err := svc.ResolveShortCode(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -106,20 +104,20 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		data := toResponse(url)
-		resp := stdresp.SuccessResponse(http.StatusOK, "The short code was successfully resolved.", data)
+		data := toURLResponse(url)
+		resp := stdresp.SuccessResponse("The short code was successfully resolved.", data)
 
 		render.JSON(w, http.StatusOK, resp)
 	})
 }
 
-func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
+func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.Handler {
 	const op = "api.http.handleModifyURL"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		shortCode := r.PathValue("shortCode")
 
-		var req request
+		var req urlRequest
 
 		if err := render.BindJSON(r, &req); err != nil {
 			if errors.Is(err, io.EOF) {
@@ -137,14 +135,14 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 		}
 
 		if err := validate.Struct(req); err != nil {
-			http.Error(w, "Bad Request", http.StatusBadRequest)
+			render.JSON(w, http.StatusBadRequest, stdresp.ValidationErrorResponse(err))
 			return
 		}
 
 		url, err := svc.ModifyURL(r.Context(), shortCode, req.URL)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -157,8 +155,8 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		data := toResponse(url)
-		resp := stdresp.SuccessResponse(http.StatusOK, "The URL was successfully modified.", data)
+		data := toURLResponse(url)
+		resp := stdresp.SuccessResponse("The URL was successfully modified.", data)
 
 		render.JSON(w, http.StatusOK, resp)
 	})
@@ -173,7 +171,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 		err := svc.DeactivateURL(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -186,7 +184,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := stdresp.SuccessResponse(http.StatusOK, "The URL was successfully deactivated.")
+		resp := stdresp.SuccessResponse("The URL was successfully deactivated.")
 
 		render.JSON(w, http.StatusOK, resp)
 	})
@@ -201,7 +199,7 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 		url, err := svc.GetURLStats(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourseNotFoundResponse)
+				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -214,9 +212,9 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		data := toResponse(url)
-		data.AccessCount = &url.AccessCount
-		resp := stdresp.SuccessResponse(http.StatusOK, "URL statistics retrieved successfully.", data)
+		data := toURLResponse(url)
+		data.AccessCount = url.AccessCount
+		resp := stdresp.SuccessResponse("URL statistics retrieved successfully.", data)
 
 		render.JSON(w, http.StatusOK, resp)
 	})
