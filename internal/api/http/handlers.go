@@ -11,6 +11,8 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/database"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 	"github.com/vadimbarashkov/url-shortener/pkg/render"
+
+	stdresp "github.com/vadimbarashkov/url-shortener/pkg/response"
 )
 
 var validate = validator.New()
@@ -75,7 +77,10 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		render.JSON(w, http.StatusCreated, toResponse(url))
+		data := toResponse(url)
+		resp := stdresp.SuccessResponse(http.StatusCreated, "The URL has been shortened successfully.", data)
+
+		render.JSON(w, http.StatusCreated, resp)
 	})
 }
 
@@ -101,7 +106,10 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		render.JSON(w, http.StatusOK, toResponse(url))
+		data := toResponse(url)
+		resp := stdresp.SuccessResponse(http.StatusOK, "The short code was successfully resolved.", data)
+
+		render.JSON(w, http.StatusOK, resp)
 	})
 }
 
@@ -149,7 +157,10 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		render.JSON(w, http.StatusOK, toResponse(url))
+		data := toResponse(url)
+		resp := stdresp.SuccessResponse(http.StatusOK, "The URL was successfully modified.", data)
+
+		render.JSON(w, http.StatusOK, resp)
 	})
 }
 
@@ -175,7 +186,9 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		w.WriteHeader(http.StatusNoContent)
+		resp := stdresp.SuccessResponse(http.StatusOK, "The URL was successfully deactivated.")
+
+		render.JSON(w, http.StatusOK, resp)
 	})
 }
 
@@ -201,8 +214,9 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := toResponse(url)
-		resp.AccessCount = &url.AccessCount
+		data := toResponse(url)
+		data.AccessCount = &url.AccessCount
+		resp := stdresp.SuccessResponse(http.StatusOK, "URL statistics retrieved successfully.", data)
 
 		render.JSON(w, http.StatusOK, resp)
 	})
