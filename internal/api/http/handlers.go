@@ -75,17 +75,7 @@ func handleShortenURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := toResponse(url)
-
-		if err := render.JSON(w, http.StatusCreated, resp); err != nil {
-			logger.Error(
-				"failed to render JSON response",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+		render.JSON(w, http.StatusCreated, toResponse(url))
 	})
 }
 
@@ -111,17 +101,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := toResponse(url)
-
-		if err := render.JSON(w, http.StatusOK, resp); err != nil {
-			logger.Error(
-				"failed to render JSON response",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+		render.JSON(w, http.StatusOK, toResponse(url))
 	})
 }
 
@@ -169,17 +149,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService) http.Handler {
 			return
 		}
 
-		resp := toResponse(url)
-
-		if err := render.JSON(w, http.StatusOK, resp); err != nil {
-			logger.Error(
-				"failed to render JSON response",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+		render.JSON(w, http.StatusOK, toResponse(url))
 	})
 }
 
@@ -234,14 +204,6 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 		resp := toResponse(url)
 		resp.AccessCount = &url.AccessCount
 
-		if err := render.JSON(w, http.StatusOK, resp); err != nil {
-			logger.Error(
-				"failed to render JSON response",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-			return
-		}
+		render.JSON(w, http.StatusOK, resp)
 	})
 }
