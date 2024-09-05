@@ -23,11 +23,15 @@ func NewRouter(logger *slog.Logger, urlSvc URLService) *http.ServeMux {
 	validate := getValidate()
 	mux := http.NewServeMux()
 
-	mux.Handle("POST /shorten", handleShortenURL(logger, urlSvc, validate))
-	mux.Handle("GET /shorten/{shortCode}", handleResolveShortCode(logger, urlSvc))
-	mux.Handle("PUT /shorten/{shortCode}", handleModifyURL(logger, urlSvc, validate))
-	mux.Handle("DELETE /shorten/{shortCode}", handleDeactivateURL(logger, urlSvc))
-	mux.Handle("GET /shorten/{shortCode}/stats", handleGetURLStats(logger, urlSvc))
+	shortenMux := http.NewServeMux()
+
+	shortenMux.Handle("POST /shorten", handleShortenURL(logger, urlSvc, validate))
+	shortenMux.Handle("GET /shorten/{shortCode}", handleResolveShortCode(logger, urlSvc))
+	shortenMux.Handle("PUT /shorten/{shortCode}", handleModifyURL(logger, urlSvc, validate))
+	shortenMux.Handle("DELETE /shorten/{shortCode}", handleDeactivateURL(logger, urlSvc))
+	shortenMux.Handle("GET /shorten/{shortCode}/stats", handleGetURLStats(logger, urlSvc))
+
+	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", shortenMux))
 
 	return mux
 }
