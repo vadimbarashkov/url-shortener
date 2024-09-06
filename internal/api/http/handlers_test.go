@@ -372,3 +372,67 @@ func TestHandleModifyURL(t *testing.T) {
 		mockURLSvc.AssertNumberOfCalls(t, "ModifyURL", 1)
 	})
 }
+
+func TestHandleDeactivateURL(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
+			Times(1).
+			Return(database.ErrURLNotFound)
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
+			Times(1).
+			Return(errors.New("unknown error"))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil)
+
+		wantResp := response.SuccessResponse("The URL was successfully deactivated.")
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
+	})
+}
