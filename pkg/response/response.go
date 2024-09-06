@@ -12,6 +12,11 @@ var EmptyRequestBodyResponse = Response{
 	Message: "Request body is empty. Please provide necessary data.",
 }
 
+var BadRequestResponse = Response{
+	Status:  StatusError,
+	Message: "Invalid request body.",
+}
+
 var ResourceNotFoundResponse = Response{
 	Status:  StatusError,
 	Message: "The requested resource was not found.",

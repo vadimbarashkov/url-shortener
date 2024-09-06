@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )

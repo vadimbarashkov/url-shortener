@@ -53,9 +53,8 @@ func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.V
 				return
 			}
 
-			render.Status(r, http.StatusInternalServerError)
-			// TODO: add new response for bad request
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, stdresp.BadRequestResponse)
 			return
 		}
 
@@ -126,14 +125,8 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 				return
 			}
 
-			logger.Error(
-				"failed to parse JSON from request body",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			render.Status(r, http.StatusInternalServerError)
-			// TODO: add new response for bad request
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, stdresp.BadRequestResponse)
 			return
 		}
 
