@@ -12,8 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/database"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
-
-	stdresp "github.com/vadimbarashkov/url-shortener/pkg/response"
+	"github.com/vadimbarashkov/url-shortener/pkg/response"
 )
 
 type urlRequest struct {
@@ -49,18 +48,18 @@ func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.V
 		if err := render.DecodeJSON(r.Body, &req); err != nil {
 			if errors.Is(err, io.EOF) {
 				render.Status(r, http.StatusBadRequest)
-				render.JSON(w, r, stdresp.EmptyRequestBodyResponse)
+				render.JSON(w, r, response.EmptyRequestBodyResponse)
 				return
 			}
 
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, stdresp.BadRequestResponse)
+			render.JSON(w, r, response.BadRequestResponse)
 			return
 		}
 
 		if err := validate.Struct(req); err != nil {
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, stdresp.ValidationErrorResponse(err))
+			render.JSON(w, r, response.ValidationErrorResponse(err))
 			return
 		}
 
@@ -72,12 +71,12 @@ func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.V
 			)
 
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.JSON(w, r, response.ServerErrorResponse)
 			return
 		}
 
 		render.Status(r, http.StatusCreated)
-		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+		render.JSON(w, r, response.SuccessResponse(successMsg, toURLResponse(url)))
 	}
 }
 
@@ -92,7 +91,7 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.HandlerFun
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
 				render.Status(r, http.StatusNotFound)
-				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
+				render.JSON(w, r, response.ResourceNotFoundResponse)
 				return
 			}
 
@@ -102,12 +101,12 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.HandlerFun
 			)
 
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.JSON(w, r, response.ServerErrorResponse)
 			return
 		}
 
 		render.Status(r, http.StatusOK)
-		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+		render.JSON(w, r, response.SuccessResponse(successMsg, toURLResponse(url)))
 	}
 }
 
@@ -121,18 +120,18 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 		if err := render.DecodeJSON(r.Body, &req); err != nil {
 			if errors.Is(err, io.EOF) {
 				render.Status(r, http.StatusBadRequest)
-				render.JSON(w, r, stdresp.EmptyRequestBodyResponse)
+				render.JSON(w, r, response.EmptyRequestBodyResponse)
 				return
 			}
 
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, stdresp.BadRequestResponse)
+			render.JSON(w, r, response.BadRequestResponse)
 			return
 		}
 
 		if err := validate.Struct(req); err != nil {
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, stdresp.ValidationErrorResponse(err))
+			render.JSON(w, r, response.ValidationErrorResponse(err))
 			return
 		}
 
@@ -142,7 +141,7 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
 				render.Status(r, http.StatusNotFound)
-				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
+				render.JSON(w, r, response.ResourceNotFoundResponse)
 				return
 			}
 
@@ -152,12 +151,12 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 			)
 
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.JSON(w, r, response.ServerErrorResponse)
 			return
 		}
 
 		render.Status(r, http.StatusOK)
-		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+		render.JSON(w, r, response.SuccessResponse(successMsg, toURLResponse(url)))
 	}
 }
 
@@ -172,7 +171,7 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
 				render.Status(r, http.StatusNotFound)
-				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
+				render.JSON(w, r, response.ResourceNotFoundResponse)
 				return
 			}
 
@@ -182,12 +181,12 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.HandlerFunc {
 			)
 
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.JSON(w, r, response.ServerErrorResponse)
 			return
 		}
 
 		render.Status(r, http.StatusOK)
-		render.JSON(w, r, stdresp.SuccessResponse(successMsg))
+		render.JSON(w, r, response.SuccessResponse(successMsg))
 	}
 }
 
@@ -202,7 +201,7 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.HandlerFunc {
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
 				render.Status(r, http.StatusNotFound)
-				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
+				render.JSON(w, r, response.ResourceNotFoundResponse)
 				return
 			}
 
@@ -212,7 +211,7 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.HandlerFunc {
 			)
 
 			render.Status(r, http.StatusInternalServerError)
-			render.JSON(w, r, stdresp.ServerErrorResponse)
+			render.JSON(w, r, response.ServerErrorResponse)
 			return
 		}
 
@@ -220,6 +219,6 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.HandlerFunc {
 		data.AccessCount = url.AccessCount
 
 		render.Status(r, http.StatusOK)
-		render.JSON(w, r, stdresp.SuccessResponse(successMsg, data))
+		render.JSON(w, r, response.SuccessResponse(successMsg, data))
 	}
 }
