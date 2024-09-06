@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/vadimbarashkov/url-shortener/internal/database"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 	"github.com/vadimbarashkov/url-shortener/pkg/response"
 )
@@ -174,5 +175,75 @@ func TestHandleShortenURL(t *testing.T) {
 		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
 		mockURLSvc.AssertExpectations(t)
 		mockURLSvc.AssertNumberOfCalls(t, "ShortenURL", 1)
+	})
+}
+
+func TestHandleResolveShortCode(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil, database.ErrURLNotFound)
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil, errors.New("unknown error"))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   mock.Anything,
+				OriginalURL: "https://example.com",
+			}, nil)
+
+		wantResp := response.SuccessResponse("The short code was successfully resolved.", urlResponse{
+			ShortCode: mock.Anything,
+			URL:       "https://example.com",
+		})
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
 	})
 }
