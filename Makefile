@@ -29,7 +29,7 @@ test:
 
 .PHONY: test-race
 test-race:
-	go test -race -cover ./...
+	go test -race ./...
 
 .PHONY: build
 build:

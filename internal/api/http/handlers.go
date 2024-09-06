@@ -204,7 +204,7 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 			}
 
 			logger.Error(
-				"failed to get jurl stats",
+				"failed to get url stats",
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
