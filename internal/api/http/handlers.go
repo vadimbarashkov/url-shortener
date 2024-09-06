@@ -7,10 +7,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/render"
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/database"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
-	"github.com/vadimbarashkov/url-shortener/pkg/render"
 
 	stdresp "github.com/vadimbarashkov/url-shortener/pkg/response"
 )
@@ -38,29 +39,29 @@ func toURLResponse(url *models.URL) urlResponse {
 	}
 }
 
-func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.Handler {
+func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.HandlerFunc {
 	const op = "api.http.handleShortenURL"
+	const successMsg = "The URL has been shortened successfully."
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		var req urlRequest
 
-		if err := render.BindJSON(r, &req); err != nil {
+		if err := render.DecodeJSON(r.Body, &req); err != nil {
 			if errors.Is(err, io.EOF) {
-				render.JSON(w, http.StatusBadRequest, stdresp.EmptyRequestBodyResponse)
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, stdresp.EmptyRequestBodyResponse)
 				return
 			}
 
-			logger.Error(
-				"failed to parse JSON from request body",
-				slog.Group(op, slog.Any("err", err)),
-			)
-
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			// TODO: add new response for bad request
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
 		if err := validate.Struct(req); err != nil {
-			render.JSON(w, http.StatusBadRequest, stdresp.ValidationErrorResponse(err))
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, stdresp.ValidationErrorResponse(err))
 			return
 		}
 
@@ -71,27 +72,28 @@ func handleShortenURL(logger *slog.Logger, svc URLService, validate *validator.V
 				slog.Group(op, slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
-		data := toURLResponse(url)
-		resp := stdresp.SuccessResponse("The URL has been shortened successfully.", data)
-
-		render.JSON(w, http.StatusCreated, resp)
-	})
+		render.Status(r, http.StatusCreated)
+		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+	}
 }
 
-func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
+func handleResolveShortCode(logger *slog.Logger, svc URLService) http.HandlerFunc {
 	const op = "api.http.handleResolveShortCode"
+	const successMsg = "The short code was successfully resolved."
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		shortCode := r.PathValue("shortCode")
+	return func(w http.ResponseWriter, r *http.Request) {
+		shortCode := chi.URLParam(r, "shortCode")
 
 		url, err := svc.ResolveShortCode(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
+				render.Status(r, http.StatusNotFound)
+				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -100,28 +102,27 @@ func handleResolveShortCode(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
-		data := toURLResponse(url)
-		resp := stdresp.SuccessResponse("The short code was successfully resolved.", data)
-
-		render.JSON(w, http.StatusOK, resp)
-	})
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+	}
 }
 
-func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.Handler {
+func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Validate) http.HandlerFunc {
 	const op = "api.http.handleModifyURL"
+	const successMsg = "The URL was successfully modified."
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		shortCode := r.PathValue("shortCode")
-
+	return func(w http.ResponseWriter, r *http.Request) {
 		var req urlRequest
 
-		if err := render.BindJSON(r, &req); err != nil {
+		if err := render.DecodeJSON(r.Body, &req); err != nil {
 			if errors.Is(err, io.EOF) {
-				render.JSON(w, http.StatusBadRequest, stdresp.EmptyRequestBodyResponse)
+				render.Status(r, http.StatusBadRequest)
+				render.JSON(w, r, stdresp.EmptyRequestBodyResponse)
 				return
 			}
 
@@ -130,19 +131,25 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 				slog.Group(op, slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			// TODO: add new response for bad request
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
 		if err := validate.Struct(req); err != nil {
-			render.JSON(w, http.StatusBadRequest, stdresp.ValidationErrorResponse(err))
+			render.Status(r, http.StatusBadRequest)
+			render.JSON(w, r, stdresp.ValidationErrorResponse(err))
 			return
 		}
+
+		shortCode := chi.URLParam(r, "shortCode")
 
 		url, err := svc.ModifyURL(r.Context(), shortCode, req.URL)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
+				render.Status(r, http.StatusNotFound)
+				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -151,27 +158,28 @@ func handleModifyURL(logger *slog.Logger, svc URLService, validate *validator.Va
 				slog.Group(op, slog.String("short_code", shortCode), slog.String("url", req.URL), slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
-		data := toURLResponse(url)
-		resp := stdresp.SuccessResponse("The URL was successfully modified.", data)
-
-		render.JSON(w, http.StatusOK, resp)
-	})
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, stdresp.SuccessResponse(successMsg, toURLResponse(url)))
+	}
 }
 
-func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
+func handleDeactivateURL(logger *slog.Logger, svc URLService) http.HandlerFunc {
 	const op = "api.http.handleDeactivateURL"
+	const successMsg = "The URL was successfully deactivated."
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		shortCode := r.PathValue("shortCode")
+	return func(w http.ResponseWriter, r *http.Request) {
+		shortCode := chi.URLParam(r, "shortCode")
 
 		err := svc.DeactivateURL(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
+				render.Status(r, http.StatusNotFound)
+				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -180,26 +188,28 @@ func handleDeactivateURL(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
-		resp := stdresp.SuccessResponse("The URL was successfully deactivated.")
-
-		render.JSON(w, http.StatusOK, resp)
-	})
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, stdresp.SuccessResponse(successMsg))
+	}
 }
 
-func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
+func handleGetURLStats(logger *slog.Logger, svc URLService) http.HandlerFunc {
 	const op = "api.http.handleGetURLStats"
+	const successMsg = "The URL statistics retrieved successfully."
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		shortCode := r.PathValue("shortCode")
+	return func(w http.ResponseWriter, r *http.Request) {
+		shortCode := chi.URLParam(r, "shortCode")
 
 		url, err := svc.GetURLStats(r.Context(), shortCode)
 		if err != nil {
 			if errors.Is(err, database.ErrURLNotFound) {
-				render.JSON(w, http.StatusNotFound, stdresp.ResourceNotFoundResponse)
+				render.Status(r, http.StatusNotFound)
+				render.JSON(w, r, stdresp.ResourceNotFoundResponse)
 				return
 			}
 
@@ -208,14 +218,15 @@ func handleGetURLStats(logger *slog.Logger, svc URLService) http.Handler {
 				slog.Group(op, slog.String("short_code", shortCode), slog.Any("err", err)),
 			)
 
-			render.JSON(w, http.StatusInternalServerError, stdresp.ServerErrorResponse)
+			render.Status(r, http.StatusInternalServerError)
+			render.JSON(w, r, stdresp.ServerErrorResponse)
 			return
 		}
 
 		data := toURLResponse(url)
 		data.AccessCount = url.AccessCount
-		resp := stdresp.SuccessResponse("URL statistics retrieved successfully.", data)
 
-		render.JSON(w, http.StatusOK, resp)
-	})
+		render.Status(r, http.StatusOK)
+		render.JSON(w, r, stdresp.SuccessResponse(successMsg, data))
+	}
 }

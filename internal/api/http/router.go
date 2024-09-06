@@ -3,10 +3,11 @@ package http
 import (
 	"context"
 	"log/slog"
-	"net/http"
 	"reflect"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
@@ -19,21 +20,30 @@ type URLService interface {
 	GetURLStats(ctx context.Context, shortCode string) (*models.URL, error)
 }
 
-func NewRouter(logger *slog.Logger, urlSvc URLService) *http.ServeMux {
-	validate := getValidate()
-	mux := http.NewServeMux()
+func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
+	r := chi.NewRouter()
 
-	shortenMux := http.NewServeMux()
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
-	shortenMux.Handle("POST /shorten", handleShortenURL(logger, urlSvc, validate))
-	shortenMux.Handle("GET /shorten/{shortCode}", handleResolveShortCode(logger, urlSvc))
-	shortenMux.Handle("PUT /shorten/{shortCode}", handleModifyURL(logger, urlSvc, validate))
-	shortenMux.Handle("DELETE /shorten/{shortCode}", handleDeactivateURL(logger, urlSvc))
-	shortenMux.Handle("GET /shorten/{shortCode}/stats", handleGetURLStats(logger, urlSvc))
+	r.Route("/api/v1", func(r chi.Router) {
+		validate := getValidate()
 
-	mux.Handle("/api/v1/", http.StripPrefix("/api/v1", shortenMux))
+		r.Route("/shorten", func(r chi.Router) {
+			r.Post("/", handleShortenURL(logger, urlSvc, validate))
 
-	return mux
+			r.Route("/{shortCode}", func(r chi.Router) {
+				r.Get("/", handleResolveShortCode(logger, urlSvc))
+				r.Put("/", handleModifyURL(logger, urlSvc, validate))
+				r.Delete("/", handleDeactivateURL(logger, urlSvc))
+				r.Get("/stats", handleGetURLStats(logger, urlSvc))
+			})
+		})
+	})
+
+	return r
 }
 
 func getValidate() *validator.Validate {
