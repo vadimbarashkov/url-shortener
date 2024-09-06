@@ -436,3 +436,75 @@ func TestHandleDeactivateURL(t *testing.T) {
 		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
 	})
 }
+
+func TestHandleGetURLStats(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil, database.ErrURLNotFound)
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
+			Times(1).
+			Return(nil, errors.New("unknown error"))
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		router, mockURLSvc := setupRouter(t)
+
+		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   mock.Anything,
+				OriginalURL: "https://example.com",
+				AccessCount: 1,
+			}, nil)
+
+		wantResp := response.SuccessResponse("The URL statistics retrieved successfully.", urlResponse{
+			ShortCode:   mock.Anything,
+			URL:         "https://example.com",
+			AccessCount: 1,
+		})
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
+		mockURLSvc.AssertExpectations(t)
+		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
+	})
+}
