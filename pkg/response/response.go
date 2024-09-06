@@ -68,7 +68,7 @@ func issueForTag(tag string) string {
 	case "url":
 		return "Invalid url."
 	default:
-		return ""
+		return "Invalid value."
 	}
 }
 
