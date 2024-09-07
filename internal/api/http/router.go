@@ -21,6 +21,20 @@ type URLService interface {
 	GetURLStats(ctx context.Context, shortCode string) (*models.URL, error)
 }
 
+func getValidate() *validator.Validate {
+	validate := validator.New()
+
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+
+	return validate
+}
+
 func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
 	r := chi.NewRouter()
 
@@ -55,18 +69,4 @@ func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
 	})
 
 	return r
-}
-
-func getValidate() *validator.Validate {
-	validate := validator.New()
-
-	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
-		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
-		if name == "-" {
-			return ""
-		}
-		return name
-	})
-
-	return validate
 }

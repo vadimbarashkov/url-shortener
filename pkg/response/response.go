@@ -47,14 +47,6 @@ func SuccessResponse(msg string, data ...any) Response {
 	return resp
 }
 
-func ValidationErrorResponse(err error) Response {
-	return Response{
-		Status:  StatusError,
-		Message: "Invalid request body. Please check your input.",
-		Details: getValidationErrors(err),
-	}
-}
-
 type validationError struct {
 	Field string `json:"field"`
 	Value any    `json:"value"`
@@ -87,4 +79,12 @@ func getValidationErrors(err error) []validationError {
 	}
 
 	return validationErrs
+}
+
+func ValidationErrorResponse(err error) Response {
+	return Response{
+		Status:  StatusError,
+		Message: "Invalid request body. Please check your input.",
+		Details: getValidationErrors(err),
+	}
 }
