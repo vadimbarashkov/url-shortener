@@ -15,22 +15,22 @@ type Config struct {
 	Postgres `envPrefix:"POSTGRES_"`
 }
 
-// Load loads the project configuration from the specified .env file path.
-// It returns a pointer to Config struct or an error.
-func Load(path string) (*Config, error) {
+// MustLoad loads the project configuration from the specified .env file path.
+// It returns a pointer to Config struct or causes a panic.
+func MustLoad(path string) *Config {
 	const op = "config.Load"
 
 	if err := godotenv.Load(path); err != nil {
-		return nil, fmt.Errorf("%s: failed to load .env file: %w", op, err)
+		panic(fmt.Errorf("%s: failed to load .env file: %w ", op, err))
 	}
 
 	var cfg Config
 
 	if err := env.Parse(&cfg); err != nil {
-		return nil, fmt.Errorf("%s: failed to parse envs: %w", op, err)
+		panic(fmt.Errorf("%s: failed to parse envs: %w", op, err))
 	}
 
-	return &cfg, nil
+	return &cfg
 }
 
 // Server represents the server configuration.
