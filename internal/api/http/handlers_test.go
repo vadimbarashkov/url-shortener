@@ -75,6 +75,18 @@ func encode[T any](t testing.TB, v T) []byte {
 	return buf.Bytes()
 }
 
+func TestHandlePing(t *testing.T) {
+	router, _ := setupRouter(t)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
+
+	router.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "pong", rec.Body.String())
+}
+
 func TestHandleShortenURL(t *testing.T) {
 	t.Run("empty request body", func(t *testing.T) {
 		router, _ := setupRouter(t)
