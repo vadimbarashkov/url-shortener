@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -14,6 +15,11 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 	"github.com/vadimbarashkov/url-shortener/pkg/response"
 )
+
+func handlePing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "pong")
+}
 
 type urlRequest struct {
 	URL string `json:"url" validate:"required,url"`
