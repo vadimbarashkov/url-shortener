@@ -2,13 +2,13 @@ package http
 
 import (
 	"context"
-	"log/slog"
 	"reflect"
 	"strings"
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httplog/v2"
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
@@ -35,7 +35,7 @@ func getValidate() *validator.Validate {
 	return validate
 }
 
-func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
+func NewRouter(logger *httplog.Logger, urlSvc URLService) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
@@ -48,7 +48,7 @@ func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
 	r.Use(middleware.AllowContentType("application/json"))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(httplog.RequestLogger(logger))
 	r.Use(middleware.Recoverer)
 
 	r.Route("/api/v1", func(r chi.Router) {
@@ -57,13 +57,13 @@ func NewRouter(logger *slog.Logger, urlSvc URLService) *chi.Mux {
 		r.Get("/ping", handlePing)
 
 		r.Route("/shorten", func(r chi.Router) {
-			r.Post("/", handleShortenURL(logger, urlSvc, validate))
+			r.Post("/", handleShortenURL(urlSvc, validate))
 
 			r.Route("/{shortCode}", func(r chi.Router) {
-				r.Get("/", handleResolveShortCode(logger, urlSvc))
-				r.Put("/", handleModifyURL(logger, urlSvc, validate))
-				r.Delete("/", handleDeactivateURL(logger, urlSvc))
-				r.Get("/stats", handleGetURLStats(logger, urlSvc))
+				r.Get("/", handleResolveShortCode(urlSvc))
+				r.Put("/", handleModifyURL(urlSvc, validate))
+				r.Delete("/", handleDeactivateURL(urlSvc))
+				r.Get("/stats", handleGetURLStats(urlSvc))
 			})
 		})
 	})

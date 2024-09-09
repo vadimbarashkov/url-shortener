@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httplog/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/vadimbarashkov/url-shortener/internal/database"
@@ -54,10 +54,8 @@ func (s *MockURLService) GetURLStats(ctx context.Context, shortCode string) (*mo
 
 func setupRouter(t testing.TB) (*chi.Mux, *MockURLService) {
 	t.Helper()
-
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	logger := httplog.NewLogger("", httplog.Options{Writer: io.Discard})
 	mockURLSvc := new(MockURLService)
-
 	return NewRouter(logger, mockURLSvc), mockURLSvc
 }
 
@@ -84,7 +82,7 @@ func TestHandlePing(t *testing.T) {
 	router.ServeHTTP(rec, req)
 
 	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "pong", rec.Body.String())
+	assert.Equal(t, "pong\n", rec.Body.String())
 }
 
 func TestHandleShortenURL(t *testing.T) {
