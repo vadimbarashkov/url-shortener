@@ -1,39 +1,56 @@
+// Package response provides utilities for creating standardized
+// API responses and handling validation errors in HTTP handlers.
 package response
 
 import "github.com/go-playground/validator/v10"
 
 const (
+	// StatusSuccess is a constant string representing a successful response status.
 	StatusSuccess = "success"
-	StatusError   = "error"
+	// StatusError is a constant string representing an error response status.
+	StatusError = "error"
 )
 
-var EmptyRequestBodyResponse = Response{
-	Status:  StatusError,
-	Message: "Request body is empty. Please provide necessary data.",
-}
+// Predefined error responses to be used across the application.
+var (
+	// EmptyRequestBodyResponse is returned when the request body is missing or empty.
+	EmptyRequestBodyResponse = Response{
+		Status:  StatusError,
+		Message: "Request body is empty. Please provide necessary data.",
+	}
 
-var BadRequestResponse = Response{
-	Status:  StatusError,
-	Message: "Invalid request body.",
-}
+	// BadRequestResponse is returned when the request body contains invalid data.
+	BadRequestResponse = Response{
+		Status:  StatusError,
+		Message: "Invalid request body.",
+	}
 
-var ResourceNotFoundResponse = Response{
-	Status:  StatusError,
-	Message: "The requested resource was not found.",
-}
+	// ResourceNotFoundResponse is returned when the requested resource is not found.
+	ResourceNotFoundResponse = Response{
+		Status:  StatusError,
+		Message: "The requested resource was not found.",
+	}
 
-var ServerErrorResponse = Response{
-	Status:  StatusError,
-	Message: "An internal server error occurred. Please try again later.",
-}
+	// ServerErrorResponse is returned when an internal server error occurs.
+	ServerErrorResponse = Response{
+		Status:  StatusError,
+		Message: "An internal server error occurred. Please try again later.",
+	}
+)
 
+// Response represents a standardized API response.
 type Response struct {
-	Status  string `json:"status"`
+	// Status indicates the status of the response (e.g., "success" or "error")
+	Status string `json:"status"`
+	// Message contains a short description of the result or error.
 	Message string `json:"message"`
-	Details any    `json:"details,omitempty"`
-	Data    any    `json:"data,omitempty"`
+	// Details holds any additional information, such as validation errors (optional).
+	Details any `json:"details,omitempty"`
+	// Data contains the result data for successful responses (optional).
+	Data any `json:"data,omitempty"`
 }
 
+// SuccessResponse returns a successful API response with a message and optional data.
 func SuccessResponse(msg string, data ...any) Response {
 	resp := Response{
 		Status:  StatusSuccess,
@@ -47,12 +64,17 @@ func SuccessResponse(msg string, data ...any) Response {
 	return resp
 }
 
+// validationError represents a validation error for a specific field.
 type validationError struct {
+	// Field is the name of the field that failed validation.
 	Field string `json:"field"`
-	Value any    `json:"value"`
+	// Value is the value of the field that failed validation.
+	Value any `json:"value"`
+	// Issue provides a description of the validation issue.
 	Issue string `json:"issue"`
 }
 
+// issueForTag maps validator tags to human-readable error messages.
 func issueForTag(tag string) string {
 	switch tag {
 	case "required":
@@ -64,6 +86,7 @@ func issueForTag(tag string) string {
 	}
 }
 
+// getValidationErrors extracts validation errors from an error returned by the validator package.
 func getValidationErrors(err error) []validationError {
 	var validationErrs []validationError
 
@@ -81,6 +104,7 @@ func getValidationErrors(err error) []validationError {
 	return validationErrs
 }
 
+// ValidationErrorResponse creates a standardized error response for failed validation requests.
 func ValidationErrorResponse(err error) Response {
 	return Response{
 		Status:  StatusError,
