@@ -31,7 +31,7 @@ type URLRepository interface {
 	// Delete removes a URL by its short code.
 	// Returns an error if the operation fails.
 	Delete(ctx context.Context, shortCode string) error
-	
+
 	// GetStats retrieves a URL by its short code without changing.
 	// Returns the URL model if found or an error if not found.
 	GetStats(ctx context.Context, shortCode string) (*models.URL, error)
