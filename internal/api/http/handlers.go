@@ -16,15 +16,18 @@ import (
 	"github.com/vadimbarashkov/url-shortener/pkg/response"
 )
 
+// handlePing handles health check requests to ensure the server is running.
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintln(w, "pong")
 }
 
+// urlRequest represents the request payload for creating or updating a shortened URL.
 type urlRequest struct {
 	URL string `json:"url" validate:"required,url"`
 }
 
+// urlResponse represents the response payload for a shortened URL operation.
 type urlResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
@@ -34,6 +37,7 @@ type urlResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// toURLResponse converts a URL model from the business layer into a response payload.
 func toURLResponse(url *models.URL) urlResponse {
 	return urlResponse{
 		ID:        url.ID,
@@ -44,6 +48,10 @@ func toURLResponse(url *models.URL) urlResponse {
 	}
 }
 
+// handleShortenURL handles POST requests to shorten a URL.
+//
+// The request must contain a valid URL. The handler validates the input, calls the URL shortening
+// service, and returns the generated short code with relevant metadata.
 func handleShortenURL(svc URLService, validate *validator.Validate) http.HandlerFunc {
 	const op = "api.http.handleShortenURL"
 	const successMsg = "The URL has been shortened successfully."
@@ -83,6 +91,10 @@ func handleShortenURL(svc URLService, validate *validator.Validate) http.Handler
 	}
 }
 
+// handleResolveShortCode handles GET requests to resolve a short code into the original URL.
+//
+// The handler fetches the original URL based on the provided short code, returning
+// the URL data if found or a 404 error if not.
 func handleResolveShortCode(svc URLService) http.HandlerFunc {
 	const op = "api.http.handleResolveShortCode"
 	const successMsg = "The short code was successfully resolved."
@@ -110,6 +122,10 @@ func handleResolveShortCode(svc URLService) http.HandlerFunc {
 	}
 }
 
+// handleModifyURL handles PUT requests to modify an existing URL.
+//
+// The request must contain a valid new URL. The handler updates the URL with the new URL,
+// returning the updated URL metadata.
 func handleModifyURL(svc URLService, validate *validator.Validate) http.HandlerFunc {
 	const op = "api.http.handleModifyURL"
 	const successMsg = "The URL was successfully modified."
@@ -157,6 +173,10 @@ func handleModifyURL(svc URLService, validate *validator.Validate) http.HandlerF
 	}
 }
 
+// handleDeactivateURL handles DELETE requests to deactivate the URL.
+//
+// Once deactivated, the URL will no longer be functional. The handler returns a success message
+// if deactivation is successful or an error if the short code doesn't exist.
 func handleDeactivateURL(svc URLService) http.HandlerFunc {
 	const op = "api.http.handleDeactivateURL"
 	const successMsg = "The URL was successfully deactivated."
@@ -184,6 +204,10 @@ func handleDeactivateURL(svc URLService) http.HandlerFunc {
 	}
 }
 
+// handleGetURLStats handles GET requests to retrieve usage statistics for a shortened URL.
+//
+// The handler fetches access counts and other statistics for the given shortened URL, returning the data
+// or a 404 error if the URL doesn't exist.
 func handleGetURLStats(svc URLService) http.HandlerFunc {
 	const op = "api.http.handleGetURLStats"
 	const successMsg = "The URL statistics retrieved successfully."

@@ -19,15 +19,19 @@ type URLRepository interface {
 	// Create inserts a new shortened URL into the repository.
 	// Returns the created URL model or an error if the operation fails.
 	Create(ctx context.Context, shortCode, originalURL string) (*models.URL, error)
+
 	// GetByShortCode retrieves a URL by its short code.
 	// Returns the URL model if found or an error if not found.
 	GetByShortCode(ctx context.Context, shortCode string) (*models.URL, error)
+
 	// Update modifies the original URL for a given short code.
 	// Returns the updated URL model or an error if the operation fails.
 	Update(ctx context.Context, shortCode, originalURL string) (*models.URL, error)
+
 	// Delete removes a URL by its short code.
 	// Returns an error if the operation fails.
 	Delete(ctx context.Context, shortCode string) error
+	
 	// GetStats retrieves a URL by its short code without changing.
 	// Returns the URL model if found or an error if not found.
 	GetStats(ctx context.Context, shortCode string) (*models.URL, error)
