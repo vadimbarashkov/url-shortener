@@ -10,9 +10,10 @@ import (
 
 // Config represents the project configuration.
 type Config struct {
-	Env      string `env:"ENV" envDefault:"dev"`
-	Server   `envPrefix:"SERVER_"`
-	Postgres `envPrefix:"POSTGRES_"`
+	Env             string `env:"ENV" envDefault:"dev"`
+	ShortCodeLength int    `env:"SHORT_CODE_LENGTH" envDefault:"7"`
+	Server          `envPrefix:"SERVER_"`
+	Postgres        `envPrefix:"POSTGRES_"`
 }
 
 // MustLoad loads the project configuration from the specified .env file path.

@@ -96,7 +96,8 @@ POSTGRES_DB=test_db
 POSTGRES_SSLMODE=disable`
 
 		wantCfg := Config{
-			Env: "test",
+			Env:             "test",
+			ShortCodeLength: 7,
 			Server: Server{
 				Port:         8443,
 				ReadTimeout:  time.Second,
