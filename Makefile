@@ -9,7 +9,7 @@ GOARCH=amd64
 GOOS=linux
 
 .PHONY: all
-all: clean tidy fmt lint test build
+all: clean tidy fmt lint test build run
 
 .PHONY: tidy
 tidy:
@@ -25,11 +25,11 @@ lint:
 
 .PHONY: test
 test:
-	go test -cover ./...
+	go test ./...
 
 .PHONY: test-race
 test-race:
-	go test -race -cover ./...
+	go test -race ./...
 
 .PHONY: build
 build:
@@ -58,16 +58,18 @@ migrations/create:
 
 .PHONY: migrations/up
 migrations/up:
-	ifndef DATABASE_DSN
-		$(error DATABASE_DSN is not defined)
-	endif
+	@if [ -z "$(DATABASE_DSN)" ]; then \
+		echo "Error: DATABASE_DSN is not defined"; \
+		exit 1; \
+	fi; \
 	migrate -database $(DATABASE_DSN) -path $(MIGRATIONS_DIR) up
 
 .PHONY: migrations/down
 migrations/down:
-	ifndef DATABASE_DSN
-		$(error DATABASE_DSN is not defined)
-	endif
+	@if [ -z "$(DATABASE_DSN)" ]; then \
+		echo "Error: DATABASE_DSN is not defined"; \
+		exit 1; \
+	fi; \
 	migrate -database $(DATABASE_DSN) -path $(MIGRATIONS_DIR) down -all
 
 .PHONY: ci

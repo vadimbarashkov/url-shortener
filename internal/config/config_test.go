@@ -28,19 +28,29 @@ func createEnvFile(t testing.TB, data []byte) *os.File {
 	return f
 }
 
-func TestLoad(t *testing.T) {
+func TestMustLoad(t *testing.T) {
 	t.Run("invalid path", func(t *testing.T) {
-		cfg, err := Load("invalid/path/to/.env")
+		defer func() {
+			err, _ := recover().(error)
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, os.ErrNotExist)
-		assert.Nil(t, cfg)
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, os.ErrNotExist)
+		}()
+
+		MustLoad("invalid/paht/to/.env")
 	})
 
 	t.Run("invalid .env file", func(t *testing.T) {
 		t.Cleanup(func() {
 			os.Clearenv()
 		})
+
+		defer func() {
+			err, _ := recover().(error)
+
+			assert.Error(t, err)
+			assert.ErrorIs(t, err, env.ParseError{})
+		}()
 
 		data := `ENV=test
 SERVER_PORT=not_number
@@ -57,17 +67,19 @@ POSTGRES_DB=test_db
 POSTGRES_SSLMODE=disable`
 
 		f := createEnvFile(t, []byte(data))
-		cfg, err := Load(f.Name())
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, env.ParseError{})
-		assert.Nil(t, cfg)
+		MustLoad(f.Name())
 	})
 
 	t.Run("success", func(t *testing.T) {
 		t.Cleanup(func() {
 			os.Clearenv()
 		})
+
+		defer func() {
+			err, _ := recover().(error)
+
+			assert.NoError(t, err)
+		}()
 
 		data := `ENV=test
 SERVER_PORT=8443
@@ -84,7 +96,8 @@ POSTGRES_DB=test_db
 POSTGRES_SSLMODE=disable`
 
 		wantCfg := Config{
-			Env: "test",
+			Env:             "test",
+			ShortCodeLength: 7,
 			Server: Server{
 				Port:         8443,
 				ReadTimeout:  time.Second,
@@ -104,9 +117,8 @@ POSTGRES_SSLMODE=disable`
 		}
 
 		f := createEnvFile(t, []byte(data))
-		cfg, err := Load(f.Name())
+		cfg := MustLoad(f.Name())
 
-		assert.NoError(t, err)
 		assert.NotNil(t, cfg)
 		assert.Equal(t, wantCfg, *cfg)
 	})

@@ -46,7 +46,7 @@ func (r *MockURLRepository) GetStats(ctx context.Context, shortCode string) (*mo
 	return url, args.Error(1)
 }
 
-func setupURLSerive(t testing.TB, shortCodeLength int) (*URLService, *MockURLRepository) {
+func setupURLService(t testing.TB, shortCodeLength int) (*URLService, *MockURLRepository) {
 	t.Helper()
 
 	mockRepo := new(MockURLRepository)
@@ -57,7 +57,7 @@ func setupURLSerive(t testing.TB, shortCodeLength int) (*URLService, *MockURLRep
 
 func TestURLService_ShortenURL(t *testing.T) {
 	t.Run("short code generation error", func(t *testing.T) {
-		svc, _ := setupURLSerive(t, -1)
+		svc, _ := setupURLService(t, -1)
 
 		url, err := svc.ShortenURL(context.TODO(), "https://example.com")
 
@@ -66,7 +66,7 @@ func TestURLService_ShortenURL(t *testing.T) {
 	})
 
 	t.Run("maximum retries error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Create", context.TODO(), mock.Anything, "https://example.com").
 			Times(5).
@@ -82,7 +82,7 @@ func TestURLService_ShortenURL(t *testing.T) {
 	})
 
 	t.Run("unknown error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Create", context.TODO(), mock.Anything, "https://example.com").
 			Times(1).
@@ -98,7 +98,7 @@ func TestURLService_ShortenURL(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Create", context.TODO(), mock.Anything, "https://example.com").
 			Times(1).
@@ -124,7 +124,7 @@ func TestURLService_ShortenURL(t *testing.T) {
 
 func TestURLService_ResolveShortCode(t *testing.T) {
 	t.Run("unknown error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("GetByShortCode", context.TODO(), mock.Anything).
 			Times(1).
@@ -140,7 +140,7 @@ func TestURLService_ResolveShortCode(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("GetByShortCode", context.TODO(), mock.Anything).
 			Times(1).
@@ -168,7 +168,7 @@ func TestURLService_ResolveShortCode(t *testing.T) {
 
 func TestURLService_ModifyURL(t *testing.T) {
 	t.Run("unknown error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Update", context.TODO(), mock.Anything, "https://new-example.com").
 			Times(1).
@@ -184,7 +184,7 @@ func TestURLService_ModifyURL(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Update", context.TODO(), mock.Anything, "https://new-example.com").
 			Times(1).
@@ -210,7 +210,7 @@ func TestURLService_ModifyURL(t *testing.T) {
 
 func TestURLService_DeactivateURL(t *testing.T) {
 	t.Run("unknown error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Delete", context.TODO(), mock.Anything).
 			Times(1).
@@ -225,7 +225,7 @@ func TestURLService_DeactivateURL(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("Delete", context.TODO(), mock.Anything).
 			Times(1).
@@ -241,7 +241,7 @@ func TestURLService_DeactivateURL(t *testing.T) {
 
 func TestURLService_GetURLStats(t *testing.T) {
 	t.Run("unknown error", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("GetStats", context.TODO(), mock.Anything).
 			Times(1).
@@ -257,7 +257,7 @@ func TestURLService_GetURLStats(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		svc, mockRepo := setupURLSerive(t, 8)
+		svc, mockRepo := setupURLService(t, 8)
 
 		mockRepo.On("GetStats", context.TODO(), mock.Anything).
 			Times(1).
