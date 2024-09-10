@@ -10,7 +10,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -52,7 +51,7 @@ func (s *MockURLService) GetURLStats(ctx context.Context, shortCode string) (*mo
 	return url, args.Error(1)
 }
 
-func setupRouter(t testing.TB) (*chi.Mux, *MockURLService) {
+func setupRouter(t testing.TB) (http.Handler, *MockURLService) {
 	t.Helper()
 	logger := httplog.NewLogger("", httplog.Options{Writer: io.Discard})
 	mockURLSvc := new(MockURLService)

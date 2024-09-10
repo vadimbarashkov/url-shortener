@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"net/http"
 	"reflect"
 	"strings"
 
@@ -35,7 +36,7 @@ func getValidate() *validator.Validate {
 	return validate
 }
 
-func NewRouter(logger *httplog.Logger, urlSvc URLService) *chi.Mux {
+func NewRouter(logger *httplog.Logger, urlSvc URLService) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(cors.Handler(cors.Options{
