@@ -28,11 +28,15 @@ func main() {
 }
 
 const (
-	envDev   = "dev"
+	// envDev is a constant string representing the development environment.
+	envDev = "dev"
+	// envStage is a constant string representing the staging environment.
 	envStage = "stg"
-	envProd  = "prod"
+	// envProd is a constant string representing the production environment.
+	envProd = "prod"
 )
 
+// setupLogger configures and returns an HTTP logger based on the provided environment.
 func setupLogger(env string) *httplog.Logger {
 	opts := httplog.Options{
 		LogLevel:        slog.LevelDebug,
@@ -57,6 +61,7 @@ func setupLogger(env string) *httplog.Logger {
 	return logger
 }
 
+// run initializes the application, sets up services, and starts the HTTP server.
 func run(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv("CONFIG_PATH"))
 	if err != nil {
