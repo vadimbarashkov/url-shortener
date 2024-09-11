@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -26,6 +27,36 @@ func main() {
 	}
 }
 
+const (
+	envDev   = "dev"
+	envStage = "stg"
+	envProd  = "prod"
+)
+
+func setupLogger(env string) *httplog.Logger {
+	opts := httplog.Options{
+		LogLevel:        slog.LevelDebug,
+		Concise:         true,
+		RequestHeaders:  true,
+		ResponseHeaders: true,
+	}
+
+	switch env {
+	case envStage:
+		opts.JSON = true
+	case envProd:
+		opts.LogLevel = slog.LevelInfo
+		opts.JSON = true
+	default:
+		env = envDev
+	}
+
+	logger := httplog.NewLogger("url-shortener", opts)
+	logger.Logger = logger.With(slog.String("env", env))
+
+	return logger
+}
+
 func run(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv("CONFIG_PATH"))
 	if err != nil {
@@ -46,7 +77,8 @@ func run(ctx context.Context) error {
 	urlRepo := postgres.NewURLRepository(db)
 	urlSvc := service.NewURLService(urlRepo, cfg.ShortCodeLength)
 
-	r := myhttp.NewRouter(httplog.NewLogger(""), urlSvc)
+	logger := setupLogger(cfg.Env)
+	r := myhttp.NewRouter(logger, urlSvc)
 
 	server := &http.Server{
 		Addr:           cfg.Server.Addr(),
