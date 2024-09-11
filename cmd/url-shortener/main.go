@@ -93,10 +93,19 @@ func run(ctx context.Context) error {
 	}
 
 	g.Go(func() error {
-		err := server.ListenAndServeTLS(cfg.Server.CertFile, cfg.Server.KeyFile)
+		var err error
+
+		switch cfg.Env {
+		case envProd:
+			err = server.ListenAndServeTLS(cfg.Server.CertFile, cfg.Server.KeyFile)
+		default:
+			err = server.ListenAndServe()
+		}
+
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			return err
 		}
+
 		return nil
 	})
 
