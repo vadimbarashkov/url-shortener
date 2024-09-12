@@ -25,10 +25,6 @@ lint:
 
 .PHONY: test
 test:
-	go test ./...
-
-.PHONY: test-race
-test-race:
 	go test -race ./...
 
 .PHONY: build
@@ -73,7 +69,7 @@ migrations/down:
 	migrate -database $(DATABASE_DSN) -path $(MIGRATIONS_DIR) down -all
 
 .PHONY: ci
-ci: tidy fmt build lint test-race clean
+ci: tidy fmt build lint test clean
 
 .PHONY: git/push
 git/push: ci
