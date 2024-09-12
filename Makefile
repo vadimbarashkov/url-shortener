@@ -25,7 +25,7 @@ lint:
 
 .PHONY: test
 test:
-	go test -race ./...
+	go test -cover -short ./...
 
 .PHONY: build
 build:

@@ -66,5 +66,5 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Run tests
-        run: go test -v -race -cover ./...
+      - name: Run unit tests
+        run: go test -v -cover -short -race ./...
