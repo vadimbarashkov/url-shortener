@@ -124,15 +124,16 @@ func TestURLRepository_Create(t *testing.T) {
 		t.SkipNow()
 	}
 
-	t.Run("duplicate short_code", func(t *testing.T) {
+	t.Run("short code exists", func(t *testing.T) {
+		ctx := context.Background()
 		repo, _ := setupURLRepository(t)
 
-		url, err := repo.Create(context.Background(), "abc123", "https://example.com")
+		url, err := repo.Create(ctx, "abc123", "https://example.com")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, url)
 
-		url, err = repo.Create(context.Background(), "abc123", "https://example2.com")
+		url, err = repo.Create(ctx, "abc123", "https://example2.com")
 
 		assert.Error(t, err)
 		assert.Error(t, err, database.ErrShortCodeExists)
@@ -140,9 +141,10 @@ func TestURLRepository_Create(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
 		repo, db := setupURLRepository(t)
 
-		url, err := repo.Create(context.Background(), "abc123", "https://example.com")
+		url, err := repo.Create(ctx, "abc123", "https://example.com")
 
 		assert.NoError(t, err)
 		assert.NotNil(t, url)
@@ -154,12 +156,50 @@ func TestURLRepository_Create(t *testing.T) {
 		query := `SELECT * FROM urls
 			WHERE short_code = $1`
 
-		if err := db.GetContext(context.Background(), &rec, query, "abc123"); err != nil {
+		if err := db.GetContext(ctx, &rec, query, "abc123"); err != nil {
 			t.Fatalf("Failed to get url record: %v", err)
 		}
 
 		assert.Equal(t, "abc123", rec.ShortCode)
 		assert.Equal(t, "https://example.com", rec.OriginalURL)
 		assert.Zero(t, rec.AccessCount)
+	})
+}
+
+func TestURLRepository_GetByShortCode(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	t.Run("url not found", func(t *testing.T) {
+		ctx := context.Background()
+		repo, _ := setupURLRepository(t)
+
+		url, err := repo.GetByShortCode(ctx, "abc123")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrURLNotFound)
+		assert.Nil(t, url)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
+		repo, db := setupURLRepository(t)
+
+		query := `INSERT INTO urls(short_code, original_url)
+			VALUES ($1, $2)`
+
+		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
+		if err != nil {
+			t.Fatalf("Failed to insert row: %v", err)
+		}
+
+		url, err := repo.GetByShortCode(ctx, "abc123")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, "abc123", url.ShortCode)
+		assert.Equal(t, "https://example.com", url.OriginalURL)
+		assert.Equal(t, int64(1), url.AccessCount)
 	})
 }

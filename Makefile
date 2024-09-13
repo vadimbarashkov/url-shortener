@@ -9,7 +9,7 @@ GOARCH=amd64
 GOOS=linux
 
 .PHONY: all
-all: clean tidy fmt lint test build run
+all: clean tidy fmt lint test-short build run
 
 .PHONY: tidy
 tidy:
@@ -23,9 +23,13 @@ fmt:
 lint:
 	golangci-lint run ./...
 
+.PHONY: test-short
+test-short:
+	go test -cover -short ./...
+
 .PHONY: test
 test:
-	go test -cover -short ./...
+	go test -cover ./...
 
 .PHONY: build
 build:
