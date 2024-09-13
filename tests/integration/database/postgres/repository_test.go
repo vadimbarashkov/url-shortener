@@ -119,6 +119,35 @@ type urlRecord struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
+func insertURLRecord(t testing.TB, ctx context.Context, db *sqlx.DB, shortCode string, originalURL string) *urlRecord {
+	t.Helper()
+
+	rec := new(urlRecord)
+	query := `INSERT INTO urls(short_code, original_url)
+		VALUES ($1, $2)
+		RETURNING *`
+
+	if err := db.GetContext(ctx, rec, query, shortCode, originalURL); err != nil {
+		t.Fatalf("Failed to insert row: %v", err)
+	}
+
+	return rec
+}
+
+func getURLRecord(t testing.TB, ctx context.Context, db *sqlx.DB, shortCode string) *urlRecord {
+	t.Helper()
+
+	rec := new(urlRecord)
+	query := `SELECT * FROM urls
+		WHERE short_code = $1`
+
+	if err := db.GetContext(ctx, rec, query, shortCode); err != nil {
+		t.Fatalf("Failed to get url record: %v", err)
+	}
+
+	return rec
+}
+
 func TestURLRepository_Create(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
@@ -126,14 +155,11 @@ func TestURLRepository_Create(t *testing.T) {
 
 	t.Run("short code exists", func(t *testing.T) {
 		ctx := context.Background()
-		repo, _ := setupURLRepository(t)
+		repo, db := setupURLRepository(t)
 
-		url, err := repo.Create(ctx, "abc123", "https://example.com")
+		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
 
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-
-		url, err = repo.Create(ctx, "abc123", "https://example2.com")
+		url, err := repo.Create(ctx, "abc123", "https://example2.com")
 
 		assert.Error(t, err)
 		assert.Error(t, err, database.ErrShortCodeExists)
@@ -152,13 +178,7 @@ func TestURLRepository_Create(t *testing.T) {
 		assert.Equal(t, "https://example.com", url.OriginalURL)
 		assert.Zero(t, url.AccessCount)
 
-		rec := new(urlRecord)
-		query := `SELECT * FROM urls
-			WHERE short_code = $1`
-
-		if err := db.GetContext(ctx, rec, query, "abc123"); err != nil {
-			t.Fatalf("Failed to get url record: %v", err)
-		}
+		rec := getURLRecord(t, ctx, db, "abc123")
 
 		assert.Equal(t, "abc123", rec.ShortCode)
 		assert.Equal(t, "https://example.com", rec.OriginalURL)
@@ -186,13 +206,7 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 		ctx := context.Background()
 		repo, db := setupURLRepository(t)
 
-		query := `INSERT INTO urls(short_code, original_url)
-			VALUES ($1, $2)`
-
-		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
-		if err != nil {
-			t.Fatalf("Failed to insert row: %v", err)
-		}
+		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
 
 		url, err := repo.GetByShortCode(ctx, "abc123")
 
@@ -224,13 +238,7 @@ func TestURLRepository_Update(t *testing.T) {
 		ctx := context.Background()
 		repo, db := setupURLRepository(t)
 
-		query := `INSERT INTO urls(short_code, original_url)
-			VALUES ($1, $2)`
-
-		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
-		if err != nil {
-			t.Fatalf("Failed to insert row: %v", err)
-		}
+		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
 
 		url, err := repo.Update(ctx, "abc123", "https://new-example.com")
 
@@ -240,13 +248,7 @@ func TestURLRepository_Update(t *testing.T) {
 		assert.Equal(t, "https://new-example.com", url.OriginalURL)
 		assert.Zero(t, url.AccessCount)
 
-		rec := new(urlRecord)
-		query = `SELECT * FROM urls
-			WHERE short_code = $1`
-
-		if err := db.GetContext(ctx, rec, query, "abc123"); err != nil {
-			t.Fatalf("Failed to get url record: %v", err)
-		}
+		rec := getURLRecord(t, ctx, db, "abc123")
 
 		assert.Equal(t, "abc123", rec.ShortCode)
 		assert.Equal(t, "https://new-example.com", rec.OriginalURL)
@@ -273,15 +275,9 @@ func TestURLRepository_Delete(t *testing.T) {
 		ctx := context.Background()
 		repo, db := setupURLRepository(t)
 
-		query := `INSERT INTO urls(short_code, original_url)
-			VALUES ($1, $2)`
+		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
 
-		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
-		if err != nil {
-			t.Fatalf("Failed to insert row: %v", err)
-		}
-
-		err = repo.Delete(ctx, "abc123")
+		err := repo.Delete(ctx, "abc123")
 
 		assert.NoError(t, err)
 	})
@@ -307,13 +303,7 @@ func TestURLRepository_GetStats(t *testing.T) {
 		ctx := context.Background()
 		repo, db := setupURLRepository(t)
 
-		query := `INSERT INTO urls(short_code, original_url)
-			VALUES ($1, $2)`
-
-		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
-		if err != nil {
-			t.Fatalf("Failed to insert row: %v", err)
-		}
+		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
 
 		url, err := repo.GetStats(ctx, "abc123")
 
