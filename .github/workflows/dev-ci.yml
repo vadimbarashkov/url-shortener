@@ -45,6 +45,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
+          args: --timeout=5m
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
