@@ -3,6 +3,7 @@ name: Dev CI
 on:
   push:
     branches:
+      - test/**
       - feature/**
       - dev
   pull_request:
@@ -66,5 +67,5 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Run unit tests
-        run: go test -v -cover -short -race ./...
+      - name: Run unit and integration tests
+        run: go test -v -cover -race ./...
