@@ -140,7 +140,6 @@ func getURLRecord(t testing.TB, ctx context.Context, db *sqlx.DB, shortCode stri
 func (suite *URLRepositoryTestSuite) Test_Create() {
 	suite.Run("short code exists", func() {
 		ctx := context.Background()
-
 		_ = insertURLRecord(suite.T(), ctx, suite.db, "abc123", "https://example.com")
 
 		url, err := suite.urlRepo.Create(ctx, "abc123", "https://example.com")
@@ -168,6 +167,34 @@ func (suite *URLRepositoryTestSuite) Test_Create() {
 	})
 }
 
+func (suite *URLRepositoryTestSuite) Test_GetByShortCode() {
+	suite.Run("url not found", func() {
+		ctx := context.Background()
+		url, err := suite.urlRepo.GetByShortCode(ctx, "abc123")
+
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+		suite.Nil(url)
+	})
+
+	suite.Run("success", func() {
+		ctx := context.Background()
+		_ = insertURLRecord(suite.T(), ctx, suite.db, "abc123", "https://example.com")
+
+		url, err := suite.urlRepo.GetByShortCode(ctx, "abc123")
+
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://example.com", url.OriginalURL)
+		suite.Equal(int64(1), url.AccessCount)
+	})
+}
+
 func TestURLRepository(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
 	suite.Run(t, new(URLRepositoryTestSuite))
 }
