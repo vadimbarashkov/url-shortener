@@ -152,11 +152,11 @@ func TestURLRepository_Create(t *testing.T) {
 		assert.Equal(t, "https://example.com", url.OriginalURL)
 		assert.Zero(t, url.AccessCount)
 
-		var rec urlRecord
+		rec := new(urlRecord)
 		query := `SELECT * FROM urls
 			WHERE short_code = $1`
 
-		if err := db.GetContext(ctx, &rec, query, "abc123"); err != nil {
+		if err := db.GetContext(ctx, rec, query, "abc123"); err != nil {
 			t.Fatalf("Failed to get url record: %v", err)
 		}
 
@@ -201,5 +201,55 @@ func TestURLRepository_GetByShortCode(t *testing.T) {
 		assert.Equal(t, "abc123", url.ShortCode)
 		assert.Equal(t, "https://example.com", url.OriginalURL)
 		assert.Equal(t, int64(1), url.AccessCount)
+	})
+}
+
+func TestURLRepository_Update(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	t.Run("url not found", func(t *testing.T) {
+		ctx := context.Background()
+		repo, _ := setupURLRepository(t)
+
+		url, err := repo.Update(ctx, "abc123", "https://new-example.com")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrURLNotFound)
+		assert.Nil(t, url)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
+		repo, db := setupURLRepository(t)
+
+		query := `INSERT INTO urls(short_code, original_url)
+			VALUES ($1, $2)`
+
+		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
+		if err != nil {
+			t.Fatalf("Failed to insert row: %v", err)
+		}
+
+		url, err := repo.Update(ctx, "abc123", "https://new-example.com")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, "abc123", url.ShortCode)
+		assert.Equal(t, "https://new-example.com", url.OriginalURL)
+		assert.Zero(t, url.AccessCount)
+
+		rec := new(urlRecord)
+		query = `SELECT * FROM urls
+			WHERE short_code = $1`
+
+		if err := db.GetContext(ctx, rec, query, "abc123"); err != nil {
+			t.Fatalf("Failed to get url record: %v", err)
+		}
+
+		assert.Equal(t, "abc123", rec.ShortCode)
+		assert.Equal(t, "https://new-example.com", rec.OriginalURL)
+		assert.Zero(t, rec.AccessCount)
 	})
 }
