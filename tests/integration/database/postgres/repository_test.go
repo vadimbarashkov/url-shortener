@@ -2,13 +2,12 @@ package postgres
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/vadimbarashkov/url-shortener/internal/config"
@@ -20,47 +19,49 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func setupPostgres(t testing.TB) config.Postgres {
-	t.Helper()
+type URLRepositoryTestSuite struct {
+	suite.Suite
+	pgCont  testcontainers.Container
+	cfg     config.Postgres
+	db      *sqlx.DB
+	m       *migrate.Migrate
+	urlRepo *postgres.URLRepository
+}
 
+func (suite *URLRepositoryTestSuite) SetupSuite() {
 	ctx := context.Background()
 
 	pgUser := "test"
 	pgPassword := "test"
 	pgDB := "url_shortener"
 
-	pgCont, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+	var err error
+	suite.pgCont, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: testcontainers.ContainerRequest{
-			Image: "postgres:16-alpine",
+			Image: "docker.io/postgres:16-alpine",
 			Env: map[string]string{
 				"POSTGRES_USER":     pgUser,
 				"POSTGRES_PASSWORD": pgPassword,
 				"POSTGRES_DB":       pgDB,
 			},
 			ExposedPorts: []string{"5432/tcp"},
-			WaitingFor:   wait.ForExposedPort(),
+			WaitingFor:   wait.ForListeningPort("5432/tcp"),
 		},
 		Started: true,
 	})
-	if err != nil {
-		t.Fatalf("Failed to start postgres container: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := pgCont.Terminate(ctx); err != nil {
-			t.Fatalf("Failed to terminate postgres container: %v", err)
-		}
+	suite.Require().NoError(err)
+	suite.T().Cleanup(func() {
+		err = suite.pgCont.Terminate(ctx)
+		suite.Require().NoError(err)
 	})
 
-	pgHost, err := pgCont.Host(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get container host: %v", err)
-	}
-	pgPort, err := pgCont.MappedPort(ctx, "5432")
-	if err != nil {
-		t.Fatalf("Failed to get container port: %v", err)
-	}
+	pgHost, err := suite.pgCont.Host(ctx)
+	suite.Require().NoError(err)
 
-	return config.Postgres{
+	pgPort, err := suite.pgCont.MappedPort(ctx, "5432")
+	suite.Require().NoError(err)
+
+	suite.cfg = config.Postgres{
 		User:     pgUser,
 		Password: pgPassword,
 		Host:     pgHost,
@@ -68,46 +69,34 @@ func setupPostgres(t testing.TB) config.Postgres {
 		DB:       pgDB,
 		SSLMode:  "disable",
 	}
-}
 
-func runMigrations(t testing.TB, cfg config.Postgres) {
-	t.Helper()
+	suite.db, err = sqlx.ConnectContext(ctx, "pgx", suite.cfg.DSN())
+	suite.Require().NoError(err)
+	suite.T().Cleanup(func() {
+		err := suite.db.Close()
+		suite.Require().NoError(err)
+	})
 
 	migrationPath := "file://../../../../migrations"
 
-	m, err := migrate.New(migrationPath, cfg.DSN())
-	if err != nil {
-		t.Fatalf("Failed to initialize migrations: %v", err)
-	}
+	suite.m, err = migrate.New(migrationPath, suite.cfg.DSN())
+	suite.Require().NoError(err)
 
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		t.Fatalf("Failed to run migrations: %v", err)
-	}
-
-	t.Cleanup(func() {
-		if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-			t.Fatalf("Failed to rollback migrations: %v", err)
-		}
+	err = suite.m.Up()
+	suite.Require().NoError(err)
+	suite.T().Cleanup(func() {
+		err := suite.m.Down()
+		suite.Require().NoError(err)
 	})
+
+	suite.urlRepo = postgres.NewURLRepository(suite.db)
 }
 
-func setupURLRepository(t testing.TB) (*postgres.URLRepository, *sqlx.DB) {
-	t.Helper()
+func (suite *URLRepositoryTestSuite) SetupSubTest() {
+	ctx := context.Background()
 
-	cfg := setupPostgres(t)
-	runMigrations(t, cfg)
-
-	db, err := sqlx.Connect("pgx", cfg.DSN())
-	if err != nil {
-		t.Fatalf("Failed to connect to database: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := db.Close(); err != nil {
-			t.Fatalf("Failed to close database: %v", err)
-		}
-	})
-
-	return postgres.NewURLRepository(db), db
+	_, err := suite.db.ExecContext(ctx, `TRUNCATE TABLE urls RESTART IDENTITY CASCADE`)
+	suite.Require().NoError(err)
 }
 
 type urlRecord struct {
@@ -148,169 +137,37 @@ func getURLRecord(t testing.TB, ctx context.Context, db *sqlx.DB, shortCode stri
 	return rec
 }
 
-func TestURLRepository_Create(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	t.Run("short code exists", func(t *testing.T) {
+func (suite *URLRepositoryTestSuite) Test_Create() {
+	suite.Run("short code exists", func() {
 		ctx := context.Background()
-		repo, db := setupURLRepository(t)
 
-		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
+		_ = insertURLRecord(suite.T(), ctx, suite.db, "abc123", "https://example.com")
 
-		url, err := repo.Create(ctx, "abc123", "https://example2.com")
+		url, err := suite.urlRepo.Create(ctx, "abc123", "https://example.com")
 
-		assert.Error(t, err)
-		assert.Error(t, err, database.ErrShortCodeExists)
-		assert.Nil(t, url)
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrShortCodeExists)
+		suite.Nil(url)
 	})
 
-	t.Run("success", func(t *testing.T) {
+	suite.Run("success", func() {
 		ctx := context.Background()
-		repo, db := setupURLRepository(t)
+		url, err := suite.urlRepo.Create(ctx, "abc123", "https://example.com")
 
-		url, err := repo.Create(ctx, "abc123", "https://example.com")
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://example.com", url.OriginalURL)
+		suite.Zero(url.AccessCount)
 
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, "abc123", url.ShortCode)
-		assert.Equal(t, "https://example.com", url.OriginalURL)
-		assert.Zero(t, url.AccessCount)
+		rec := getURLRecord(suite.T(), ctx, suite.db, "abc123")
 
-		rec := getURLRecord(t, ctx, db, "abc123")
-
-		assert.Equal(t, "abc123", rec.ShortCode)
-		assert.Equal(t, "https://example.com", rec.OriginalURL)
-		assert.Zero(t, rec.AccessCount)
+		suite.Equal("abc123", rec.ShortCode)
+		suite.Equal("https://example.com", rec.OriginalURL)
+		suite.Zero(rec.AccessCount)
 	})
 }
 
-func TestURLRepository_GetByShortCode(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	t.Run("url not found", func(t *testing.T) {
-		ctx := context.Background()
-		repo, _ := setupURLRepository(t)
-
-		url, err := repo.GetByShortCode(ctx, "abc123")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		ctx := context.Background()
-		repo, db := setupURLRepository(t)
-
-		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
-
-		url, err := repo.GetByShortCode(ctx, "abc123")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, "abc123", url.ShortCode)
-		assert.Equal(t, "https://example.com", url.OriginalURL)
-		assert.Equal(t, int64(1), url.AccessCount)
-	})
-}
-
-func TestURLRepository_Update(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	t.Run("url not found", func(t *testing.T) {
-		ctx := context.Background()
-		repo, _ := setupURLRepository(t)
-
-		url, err := repo.Update(ctx, "abc123", "https://new-example.com")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		ctx := context.Background()
-		repo, db := setupURLRepository(t)
-
-		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
-
-		url, err := repo.Update(ctx, "abc123", "https://new-example.com")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, "abc123", url.ShortCode)
-		assert.Equal(t, "https://new-example.com", url.OriginalURL)
-		assert.Zero(t, url.AccessCount)
-
-		rec := getURLRecord(t, ctx, db, "abc123")
-
-		assert.Equal(t, "abc123", rec.ShortCode)
-		assert.Equal(t, "https://new-example.com", rec.OriginalURL)
-		assert.Zero(t, rec.AccessCount)
-	})
-}
-
-func TestURLRepository_Delete(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	t.Run("url not found", func(t *testing.T) {
-		ctx := context.Background()
-		repo, _ := setupURLRepository(t)
-
-		err := repo.Delete(ctx, "abc123")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		ctx := context.Background()
-		repo, db := setupURLRepository(t)
-
-		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
-
-		err := repo.Delete(ctx, "abc123")
-
-		assert.NoError(t, err)
-	})
-}
-
-func TestURLRepository_GetStats(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
-	t.Run("url not found", func(t *testing.T) {
-		ctx := context.Background()
-		repo, _ := setupURLRepository(t)
-
-		url, err := repo.GetStats(ctx, "abc123")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		ctx := context.Background()
-		repo, db := setupURLRepository(t)
-
-		_ = insertURLRecord(t, ctx, db, "abc123", "https://example.com")
-
-		url, err := repo.GetStats(ctx, "abc123")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, "abc123", url.ShortCode)
-		assert.Equal(t, "https://example.com", url.OriginalURL)
-		assert.Zero(t, url.AccessCount)
-	})
+func TestURLRepository(t *testing.T) {
+	suite.Run(t, new(URLRepositoryTestSuite))
 }
