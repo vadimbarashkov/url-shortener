@@ -221,6 +221,25 @@ func (suite *URLRepositoryTestSuite) Test_Update() {
 	})
 }
 
+func (suite *URLRepositoryTestSuite) Test_Delete() {
+	suite.Run("url not found", func() {
+		ctx := context.Background()
+		err := suite.urlRepo.Delete(ctx, "abc123")
+
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+	})
+
+	suite.Run("success", func() {
+		ctx := context.Background()
+		_ = insertURLRecord(suite.T(), ctx, suite.db, "abc123", "https://example.com")
+
+		err := suite.urlRepo.Delete(ctx, "abc123")
+
+		suite.NoError(err)
+	})
+}
+
 func TestURLRepository(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
