@@ -191,6 +191,36 @@ func (suite *URLRepositoryTestSuite) Test_GetByShortCode() {
 	})
 }
 
+func (suite *URLRepositoryTestSuite) Test_Update() {
+	suite.Run("url not found", func() {
+		ctx := context.Background()
+		url, err := suite.urlRepo.Update(ctx, "abc123", "https://new-example.com")
+
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+		suite.Nil(url)
+	})
+
+	suite.Run("success", func() {
+		ctx := context.Background()
+		_ = insertURLRecord(suite.T(), ctx, suite.db, "abc123", "https://example.com")
+
+		url, err := suite.urlRepo.Update(ctx, "abc123", "https://new-example.com")
+
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://new-example.com", url.OriginalURL)
+		suite.Zero(url.AccessCount)
+
+		rec := getURLRecord(suite.T(), ctx, suite.db, "abc123")
+
+		suite.Equal("abc123", rec.ShortCode)
+		suite.Equal("https://new-example.com", url.OriginalURL)
+		suite.Zero(rec.AccessCount)
+	})
+}
+
 func TestURLRepository(t *testing.T) {
 	if testing.Short() {
 		t.SkipNow()
