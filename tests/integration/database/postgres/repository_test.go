@@ -286,3 +286,41 @@ func TestURLRepository_Delete(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestURLRepository_GetStats(t *testing.T) {
+	if testing.Short() {
+		t.SkipNow()
+	}
+
+	t.Run("url not found", func(t *testing.T) {
+		ctx := context.Background()
+		repo, _ := setupURLRepository(t)
+
+		url, err := repo.GetStats(ctx, "abc123")
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, database.ErrURLNotFound)
+		assert.Nil(t, url)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		ctx := context.Background()
+		repo, db := setupURLRepository(t)
+
+		query := `INSERT INTO urls(short_code, original_url)
+			VALUES ($1, $2)`
+
+		_, err := db.ExecContext(ctx, query, "abc123", "https://example.com")
+		if err != nil {
+			t.Fatalf("Failed to insert row: %v", err)
+		}
+
+		url, err := repo.GetStats(ctx, "abc123")
+
+		assert.NoError(t, err)
+		assert.NotNil(t, url)
+		assert.Equal(t, "abc123", url.ShortCode)
+		assert.Equal(t, "https://example.com", url.OriginalURL)
+		assert.Zero(t, url.AccessCount)
+	})
+}
