@@ -64,7 +64,6 @@ func NewRouter(logger *httplog.Logger, urlSvc URLService) http.Handler {
 		AllowCredentials: false,
 		MaxAge:           84600,
 	}))
-	r.Use(middleware.AllowContentType("application/json"))
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(httplog.RequestLogger(logger))

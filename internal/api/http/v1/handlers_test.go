@@ -1,18 +1,18 @@
 package http
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gavv/httpexpect/v2"
 	"github.com/go-chi/httplog/v2"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/suite"
 	"github.com/vadimbarashkov/url-shortener/internal/database"
 	"github.com/vadimbarashkov/url-shortener/internal/models"
 	"github.com/vadimbarashkov/url-shortener/pkg/response"
@@ -51,469 +51,412 @@ func (s *MockURLService) GetURLStats(ctx context.Context, shortCode string) (*mo
 	return url, args.Error(1)
 }
 
-func setupRouter(t testing.TB) (http.Handler, *MockURLService) {
-	t.Helper()
-	logger := httplog.NewLogger("", httplog.Options{Writer: io.Discard})
-	mockURLSvc := new(MockURLService)
-	return NewRouter(logger, mockURLSvc), mockURLSvc
+type HandlersTestSuite struct {
+	suite.Suite
+	logger     *httplog.Logger
+	urlSvcMock *MockURLService
+	server     *httptest.Server
+	e          *httpexpect.Expect
 }
 
-func encode[T any](t testing.TB, v T) []byte {
-	t.Helper()
-
-	buf := new(bytes.Buffer)
-	enc := json.NewEncoder(buf)
-	enc.SetEscapeHTML(true)
-
-	if err := enc.Encode(v); err != nil {
-		t.Fatal(err)
-	}
-
-	return buf.Bytes()
+func (suite *HandlersTestSuite) SetupSuite() {
+	suite.logger = httplog.NewLogger("", httplog.Options{Writer: io.Discard})
 }
 
-func TestHandlePing(t *testing.T) {
-	router, _ := setupRouter(t)
-
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/ping", nil)
-
-	router.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "pong\n", rec.Body.String())
+func (suite *HandlersTestSuite) SetupSubTest() {
+	suite.urlSvcMock = new(MockURLService)
+	router := NewRouter(suite.logger, suite.urlSvcMock)
+	suite.server = httptest.NewServer(router)
+	suite.e = httpexpect.Default(suite.T(), suite.server.URL)
 }
 
-func TestHandleShortenURL(t *testing.T) {
-	t.Run("empty request body", func(t *testing.T) {
-		router, _ := setupRouter(t)
+func (suite *HandlersTestSuite) TeadDownSubTest() {
+	suite.urlSvcMock.AssertExpectations(suite.T())
+	suite.server.Close()
+}
 
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/shorten", nil)
-		req.Header.Set("Content-Type", "application/json")
+func (suite *HandlersTestSuite) TestPing() {
+	const path = "/api/v1/ping"
 
-		router.ServeHTTP(rec, req)
+	suite.Run("success", func() {
+		suite.e.GET(path).
+			Expect().
+			Status(http.StatusOK).
+			Text().IsEqual("pong\n")
+	})
+}
 
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.EmptyRequestBodyResponse), rec.Body.Bytes())
+func (suite *HandlersTestSuite) TestShortenURL() {
+	const path = "/api/v1/shorten"
+
+	suite.Run("empty request body", func() {
+		suite.e.POST(path).
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.EmptyRequestBodyResponse.Message)
 	})
 
-	t.Run("invalid request body", func(t *testing.T) {
-		router, _ := setupRouter(t)
-
-		reqBody := bytes.NewBufferString(`invalid body`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/shorten", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.BadRequestResponse), rec.Body.Bytes())
+	suite.Run("invalid request body", func() {
+		suite.e.POST(path).
+			WithJSON("invalid body").
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.BadRequestResponse.Message)
 	})
 
-	t.Run("validation error", func(t *testing.T) {
-		router, _ := setupRouter(t)
-
-		validate := getValidate()
-		wantResp := response.ValidationErrorResponse(validate.Struct(urlRequest{"not url"}))
-
-		reqBody := bytes.NewBufferString(`{"url": "not url"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/shorten", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
+	suite.Run("validation error", func() {
+		suite.e.POST(path).
+			WithJSON(map[string]string{
+				"url": "invalid url",
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			ContainsKey("message").
+			ContainsKey("details")
 	})
 
-	t.Run("server error", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ShortenURL", mock.Anything, "https://example.com").
+	suite.Run("server error", func() {
+		suite.urlSvcMock.
+			On("ShortenURL", mock.Anything, "https://example.com").
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		reqBody := bytes.NewBufferString(`{"url": "https://example.com"}`)
+		suite.e.POST(path).
+			WithJSON(map[string]string{
+				"url": "https://example.com",
+			}).
+			Expect().
+			Status(http.StatusInternalServerError).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ServerErrorResponse.Message)
 
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/shorten", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ShortenURL", 1)
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ShortenURL", 1)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ShortenURL", mock.Anything, "https://example.com").
+	suite.Run("success", func() {
+		suite.urlSvcMock.
+			On("ShortenURL", mock.Anything, "https://example.com").
 			Times(1).
 			Return(&models.URL{
-				ShortCode:   mock.Anything,
+				ShortCode:   "abc123",
 				OriginalURL: "https://example.com",
 			}, nil)
 
-		wantResp := response.SuccessResponse("The URL has been shortened successfully.", urlResponse{
-			ShortCode: mock.Anything,
-			URL:       "https://example.com",
-		})
+		suite.e.POST(path).
+			WithJSON(map[string]string{
+				"url": "https://example.com",
+			}).
+			Expect().
+			Status(http.StatusCreated).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusSuccess).
+			ContainsKey("message").
+			Value("data").Object().
+			HasValue("short_code", "abc123").
+			HasValue("url", "https://example.com")
 
-		reqBody := bytes.NewBufferString(`{"url": "https://example.com"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/shorten", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusCreated, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ShortenURL", 1)
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ShortenURL", 1)
 	})
 }
 
-func TestHandleResolveShortCode(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
+func (suite *HandlersTestSuite) TestResolveShortCode() {
+	const path = "/api/v1/shorten/%s"
 
-		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+	suite.Run("not found", func() {
+		suite.urlSvcMock.
+			On("ResolveShortCode", mock.Anything, "abc123").
 			Times(1).
 			Return(nil, database.ErrURLNotFound)
 
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusNotFound).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ResourceNotFoundResponse.Message)
 
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusNotFound, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
 
-	t.Run("server error", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+	suite.Run("server error", func() {
+		suite.urlSvcMock.
+			On("ResolveShortCode", mock.Anything, "abc123").
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusInternalServerError).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ServerErrorResponse.Message)
 
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ResolveShortCode", mock.Anything, mock.Anything).
+	suite.Run("success", func() {
+		suite.urlSvcMock.
+			On("ResolveShortCode", mock.Anything, "abc123").
 			Times(1).
 			Return(&models.URL{
-				ShortCode:   mock.Anything,
-				OriginalURL: "https://example.com",
-			}, nil)
-
-		wantResp := response.SuccessResponse("The short code was successfully resolved.", urlResponse{
-			ShortCode: mock.Anything,
-			URL:       "https://example.com",
-		})
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ResolveShortCode", 1)
-	})
-}
-
-func TestHandleModifyURL(t *testing.T) {
-	t.Run("empty request body", func(t *testing.T) {
-		router, _ := setupRouter(t)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.EmptyRequestBodyResponse), rec.Body.Bytes())
-	})
-
-	t.Run("invalid request body", func(t *testing.T) {
-		router, _ := setupRouter(t)
-
-		reqBody := bytes.NewBufferString(`invalid body`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.BadRequestResponse), rec.Body.Bytes())
-	})
-
-	t.Run("validation error", func(t *testing.T) {
-		router, _ := setupRouter(t)
-
-		validate := getValidate()
-		wantResp := response.ValidationErrorResponse(validate.Struct(urlRequest{"not url"}))
-
-		reqBody := bytes.NewBufferString(`{"url": "not url"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ModifyURL", mock.Anything, mock.Anything, "https://new-example.com").
-			Times(1).
-			Return(nil, database.ErrURLNotFound)
-
-		reqBody := bytes.NewBufferString(`{"url": "https://new-example.com"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusNotFound, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ModifyURL", 1)
-	})
-
-	t.Run("server error", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ModifyURL", mock.Anything, mock.Anything, "https://new-example.com").
-			Times(1).
-			Return(nil, errors.New("unknown error"))
-
-		reqBody := bytes.NewBufferString(`{"url": "https://new-example.com"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ModifyURL", 1)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("ModifyURL", mock.Anything, mock.Anything, "https://new-example.com").
-			Times(1).
-			Return(&models.URL{
-				ShortCode:   mock.Anything,
-				OriginalURL: "https://new-example.com",
-			}, nil)
-
-		wantResp := response.SuccessResponse("The URL was successfully modified.", urlResponse{
-			ShortCode: mock.Anything,
-			URL:       "https://new-example.com",
-		})
-
-		reqBody := bytes.NewBufferString(`{"url": "https://new-example.com"}`)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPut, "/api/v1/shorten/mock.Anything", reqBody)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "ModifyURL", 1)
-	})
-}
-
-func TestHandleDeactivateURL(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
-			Times(1).
-			Return(database.ErrURLNotFound)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusNotFound, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
-	})
-
-	t.Run("server error", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
-			Times(1).
-			Return(errors.New("unknown error"))
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("DeactivateURL", mock.Anything, mock.Anything).
-			Times(1).
-			Return(nil)
-
-		wantResp := response.SuccessResponse("The URL was successfully deactivated.")
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodDelete, "/api/v1/shorten/mock.Something", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "DeactivateURL", 1)
-	})
-}
-
-func TestHandleGetURLStats(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
-			Times(1).
-			Return(nil, database.ErrURLNotFound)
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusNotFound, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ResourceNotFoundResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
-	})
-
-	t.Run("server error", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
-			Times(1).
-			Return(nil, errors.New("unknown error"))
-
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, response.ServerErrorResponse), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
-	})
-
-	t.Run("success", func(t *testing.T) {
-		router, mockURLSvc := setupRouter(t)
-
-		mockURLSvc.On("GetURLStats", mock.Anything, mock.Anything).
-			Times(1).
-			Return(&models.URL{
-				ShortCode:   mock.Anything,
+				ShortCode:   "abc123",
 				OriginalURL: "https://example.com",
 				AccessCount: 1,
 			}, nil)
 
-		wantResp := response.SuccessResponse("The URL statistics retrieved successfully.", urlResponse{
-			ShortCode:   mock.Anything,
-			URL:         "https://example.com",
-			AccessCount: 1,
-		})
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusOK).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusSuccess).
+			ContainsKey("message").
+			Value("data").Object().
+			HasValue("short_code", "abc123").
+			HasValue("url", "https://example.com").
+			NotContainsKey("access_count")
 
-		rec := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/v1/shorten/mock.Something/stats", nil)
-		req.Header.Set("Content-Type", "application/json")
-
-		router.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
-		assert.Equal(t, encode(t, wantResp), rec.Body.Bytes())
-		mockURLSvc.AssertExpectations(t)
-		mockURLSvc.AssertNumberOfCalls(t, "GetURLStats", 1)
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
+}
+
+func (suite *HandlersTestSuite) TestModifyURL() {
+	const path = "/api/v1/shorten/%s"
+
+	suite.Run("empty request body", func() {
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.EmptyRequestBodyResponse.Message)
+	})
+
+	suite.Run("invalid request body", func() {
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			WithJSON("invalid body").
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.BadRequestResponse.Message)
+	})
+
+	suite.Run("validation error", func() {
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			WithJSON(map[string]string{
+				"url": "invalid url",
+			}).
+			Expect().
+			Status(http.StatusBadRequest).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			ContainsKey("message").
+			ContainsKey("details")
+	})
+
+	suite.Run("not found", func() {
+		suite.urlSvcMock.
+			On("ModifyURL", mock.Anything, "abc123", "https://new-example.com").
+			Times(1).
+			Return(nil, database.ErrURLNotFound)
+
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			WithJSON(map[string]string{
+				"url": "https://new-example.com",
+			}).
+			Expect().
+			Status(http.StatusNotFound).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ResourceNotFoundResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
+	})
+
+	suite.Run("server error", func() {
+		suite.urlSvcMock.
+			On("ModifyURL", mock.Anything, "abc123", "https://new-example.com").
+			Times(1).
+			Return(nil, errors.New("unknown error"))
+
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			WithJSON(map[string]string{
+				"url": "https://new-example.com",
+			}).
+			Expect().
+			Status(http.StatusInternalServerError).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ServerErrorResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
+	})
+
+	suite.Run("success", func() {
+		suite.urlSvcMock.
+			On("ModifyURL", mock.Anything, "abc123", "https://new-example.com").
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   "abc123",
+				OriginalURL: "https://new-example.com",
+			}, nil)
+
+		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+			WithJSON(map[string]string{
+				"url": "https://new-example.com",
+			}).
+			Expect().
+			Status(http.StatusOK).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusSuccess).
+			ContainsKey("message").
+			Value("data").Object().
+			HasValue("short_code", "abc123").
+			HasValue("url", "https://new-example.com")
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
+	})
+}
+
+func (suite *HandlersTestSuite) TestDeactivateURL() {
+	const path = "/api/v1/shorten/%s"
+
+	suite.Run("not found", func() {
+		suite.urlSvcMock.
+			On("DeactivateURL", mock.Anything, "abc123").
+			Times(1).
+			Return(database.ErrURLNotFound)
+
+		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusNotFound).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ResourceNotFoundResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
+	})
+
+	suite.Run("server error", func() {
+		suite.urlSvcMock.
+			On("DeactivateURL", mock.Anything, "abc123").
+			Times(1).
+			Return(errors.New("unknown error"))
+
+		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusInternalServerError).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ServerErrorResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
+	})
+
+	suite.Run("success", func() {
+		suite.urlSvcMock.
+			On("DeactivateURL", mock.Anything, "abc123").
+			Times(1).
+			Return(nil)
+
+		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusOK).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusSuccess).
+			ContainsKey("message")
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
+	})
+}
+
+func (suite *HandlersTestSuite) TestGetURLStats() {
+	const path = "/api/v1/shorten/%s/stats"
+
+	suite.Run("not found", func() {
+		suite.urlSvcMock.
+			On("GetURLStats", mock.Anything, "abc123").
+			Times(1).
+			Return(nil, database.ErrURLNotFound)
+
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusNotFound).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ResourceNotFoundResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
+	})
+
+	suite.Run("server error", func() {
+		suite.urlSvcMock.
+			On("GetURLStats", mock.Anything, "abc123").
+			Times(1).
+			Return(nil, errors.New("unknown error"))
+
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusInternalServerError).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusError).
+			HasValue("message", response.ServerErrorResponse.Message)
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
+	})
+
+	suite.Run("success", func() {
+		suite.urlSvcMock.
+			On("GetURLStats", mock.Anything, "abc123").
+			Times(1).
+			Return(&models.URL{
+				ShortCode:   "abc123",
+				OriginalURL: "https://example.com",
+				AccessCount: 1,
+			}, nil)
+
+		suite.e.GET(fmt.Sprintf(path, "abc123")).
+			Expect().
+			Status(http.StatusOK).
+			HasContentType("application/json").
+			JSON().Object().
+			HasValue("status", response.StatusSuccess).
+			ContainsKey("message").
+			Value("data").Object().
+			HasValue("short_code", "abc123").
+			HasValue("url", "https://example.com").
+			HasValue("access_count", int64(1))
+
+		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
+	})
+}
+
+func TestAPI(t *testing.T) {
+	suite.Run(t, new(HandlersTestSuite))
 }
