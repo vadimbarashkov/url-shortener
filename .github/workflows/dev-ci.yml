@@ -3,8 +3,8 @@ name: Dev CI
 on:
   push:
     branches:
-      - test/**
       - feature/**
+      - test/**
       - dev
   pull_request:
     branches:
@@ -45,12 +45,12 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go-version }}
-          args: --timeout=5m
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: v1.60
+          args: --timeout=30m
 
   test:
     strategy:
