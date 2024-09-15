@@ -32,7 +32,7 @@ type urlResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
 	URL         string    `json:"url"`
-	AccessCount int64     `json:"access_count,omitempty"`
+	AccessCount int64     `json:"access_count"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }

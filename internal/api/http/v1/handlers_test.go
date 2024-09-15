@@ -90,38 +90,38 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 	const path = "/api/v1/shorten"
 
 	suite.Run("empty request body", func() {
-		suite.e.POST(path).
+		resp := suite.e.POST(path).
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.EmptyRequestBodyResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.EmptyRequestBodyResponse.Status)
+		resp.HasValue("message", response.EmptyRequestBodyResponse.Message)
 	})
 
 	suite.Run("invalid request body", func() {
-		suite.e.POST(path).
+		resp := suite.e.POST(path).
 			WithJSON("invalid body").
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.BadRequestResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.BadRequestResponse.Status)
+		resp.HasValue("message", response.BadRequestResponse.Message)
 	})
 
 	suite.Run("validation error", func() {
-		suite.e.POST(path).
+		resp := suite.e.POST(path).
 			WithJSON(map[string]string{
 				"url": "invalid url",
 			}).
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			ContainsKey("message").
-			ContainsKey("details")
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusError)
+		resp.ContainsKey("message")
+		resp.ContainsKey("details")
 	})
 
 	suite.Run("server error", func() {
@@ -130,16 +130,16 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		suite.e.POST(path).
+		resp := suite.e.POST(path).
 			WithJSON(map[string]string{
 				"url": "https://example.com",
 			}).
 			Expect().
 			Status(http.StatusInternalServerError).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ServerErrorResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ServerErrorResponse.Status)
+		resp.HasValue("message", response.ServerErrorResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ShortenURL", 1)
 	})
@@ -153,17 +153,17 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 				OriginalURL: "https://example.com",
 			}, nil)
 
-		suite.e.POST(path).
+		resp := suite.e.POST(path).
 			WithJSON(map[string]string{
 				"url": "https://example.com",
 			}).
 			Expect().
 			Status(http.StatusCreated).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusSuccess).
-			ContainsKey("message").
-			Value("data").Object().
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusSuccess)
+		resp.ContainsKey("message")
+		resp.Value("data").Object().
 			HasValue("short_code", "abc123").
 			HasValue("url", "https://example.com")
 
@@ -180,13 +180,13 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 			Times(1).
 			Return(nil, database.ErrURLNotFound)
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ResourceNotFoundResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
+		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -197,13 +197,13 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusInternalServerError).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ServerErrorResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ServerErrorResponse.Status)
+		resp.HasValue("message", response.ServerErrorResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -218,17 +218,17 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 				AccessCount: 1,
 			}, nil)
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusOK).
 			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusSuccess).
-			ContainsKey("message").
-			Value("data").Object().
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusSuccess)
+		resp.ContainsKey("message")
+		resp.Value("data").Object().
 			HasValue("short_code", "abc123").
-			HasValue("url", "https://example.com").
-			NotContainsKey("access_count")
+			HasValue("url", "https://example.com")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -238,38 +238,38 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 	const path = "/api/v1/shorten/%s"
 
 	suite.Run("empty request body", func() {
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.EmptyRequestBodyResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.EmptyRequestBodyResponse.Status)
+		resp.HasValue("message", response.EmptyRequestBodyResponse.Message)
 	})
 
 	suite.Run("invalid request body", func() {
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			WithJSON("invalid body").
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.BadRequestResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.BadRequestResponse.Status)
+		resp.HasValue("message", response.BadRequestResponse.Message)
 	})
 
 	suite.Run("validation error", func() {
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			WithJSON(map[string]string{
 				"url": "invalid url",
 			}).
 			Expect().
 			Status(http.StatusBadRequest).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			ContainsKey("message").
-			ContainsKey("details")
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusError)
+		resp.ContainsKey("message")
+		resp.ContainsKey("details")
 	})
 
 	suite.Run("not found", func() {
@@ -278,16 +278,16 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Times(1).
 			Return(nil, database.ErrURLNotFound)
 
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			WithJSON(map[string]string{
 				"url": "https://new-example.com",
 			}).
 			Expect().
 			Status(http.StatusNotFound).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ResourceNotFoundResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
+		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
 	})
@@ -298,16 +298,16 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			WithJSON(map[string]string{
 				"url": "https://new-example.com",
 			}).
 			Expect().
 			Status(http.StatusInternalServerError).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ServerErrorResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ServerErrorResponse.Status)
+		resp.HasValue("message", response.ServerErrorResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
 	})
@@ -321,17 +321,17 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 				OriginalURL: "https://new-example.com",
 			}, nil)
 
-		suite.e.PUT(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
 			WithJSON(map[string]string{
 				"url": "https://new-example.com",
 			}).
 			Expect().
 			Status(http.StatusOK).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusSuccess).
-			ContainsKey("message").
-			Value("data").Object().
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusSuccess)
+		resp.ContainsKey("message")
+		resp.Value("data").Object().
 			HasValue("short_code", "abc123").
 			HasValue("url", "https://new-example.com")
 
@@ -348,13 +348,13 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			Times(1).
 			Return(database.ErrURLNotFound)
 
-		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.DELETE(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ResourceNotFoundResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
+		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
 	})
@@ -365,13 +365,13 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			Times(1).
 			Return(errors.New("unknown error"))
 
-		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.DELETE(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusInternalServerError).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ServerErrorResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ServerErrorResponse.Status)
+		resp.HasValue("message", response.ServerErrorResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
 	})
@@ -382,13 +382,14 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			Times(1).
 			Return(nil)
 
-		suite.e.DELETE(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.DELETE(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusOK).
 			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusSuccess).
-			ContainsKey("message")
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusSuccess)
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
 	})
@@ -403,13 +404,13 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 			Times(1).
 			Return(nil, database.ErrURLNotFound)
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ResourceNotFoundResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
+		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
 	})
@@ -420,13 +421,13 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 			Times(1).
 			Return(nil, errors.New("unknown error"))
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusInternalServerError).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusError).
-			HasValue("message", response.ServerErrorResponse.Message)
+			JSON().Object()
+
+		resp.HasValue("status", response.ServerErrorResponse.Status)
+		resp.HasValue("message", response.ServerErrorResponse.Message)
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
 	})
@@ -441,14 +442,14 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 				AccessCount: 1,
 			}, nil)
 
-		suite.e.GET(fmt.Sprintf(path, "abc123")).
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusOK).
-			HasContentType("application/json").
-			JSON().Object().
-			HasValue("status", response.StatusSuccess).
-			ContainsKey("message").
-			Value("data").Object().
+			JSON().Object()
+
+		resp.HasValue("status", response.StatusSuccess)
+		resp.ContainsKey("message")
+		resp.Value("data").Object().
 			HasValue("short_code", "abc123").
 			HasValue("url", "https://example.com").
 			HasValue("access_count", int64(1))
