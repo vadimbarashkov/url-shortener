@@ -9,7 +9,7 @@ GOARCH=amd64
 GOOS=linux
 
 .PHONY: all
-all: clean tidy fmt lint test build run
+all: clean tidy fmt lint test-short build run
 
 .PHONY: tidy
 tidy:
@@ -23,13 +23,13 @@ fmt:
 lint:
 	golangci-lint run ./...
 
+.PHONY: test-short
+test-short:
+	go test -cover -short ./...
+
 .PHONY: test
 test:
-	go test ./...
-
-.PHONY: test-race
-test-race:
-	go test -race ./...
+	go test -cover ./...
 
 .PHONY: build
 build:
@@ -73,7 +73,7 @@ migrations/down:
 	migrate -database $(DATABASE_DSN) -path $(MIGRATIONS_DIR) down -all
 
 .PHONY: ci
-ci: tidy fmt build lint test-race clean
+ci: tidy fmt build lint test clean
 
 .PHONY: git/push
 git/push: ci

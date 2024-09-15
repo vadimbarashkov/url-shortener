@@ -16,12 +16,12 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/service"
 	"golang.org/x/sync/errgroup"
 
-	myhttp "github.com/vadimbarashkov/url-shortener/internal/api/http"
+	api "github.com/vadimbarashkov/url-shortener/internal/api/http/v1"
 )
 
 func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
 	if err := run(ctx); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -85,7 +85,7 @@ func run(ctx context.Context) error {
 	urlSvc := service.NewURLService(urlRepo, cfg.ShortCodeLength)
 
 	logger := setupLogger(cfg.Env)
-	r := myhttp.NewRouter(logger, urlSvc)
+	r := api.NewRouter(logger, urlSvc)
 
 	server := &http.Server{
 		Addr:           cfg.Server.Addr(),

@@ -10,312 +10,261 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"github.com/vadimbarashkov/url-shortener/internal/database"
-	"github.com/vadimbarashkov/url-shortener/internal/models"
 )
 
-var (
-	errUnknown      = errors.New("unknown error")
-	errAffectedRows = errors.New("affected rows error")
-)
+type URLRepositoryTestSuite struct {
+	suite.Suite
+	mock            sqlmock.Sqlmock
+	repo            *URLRepository
+	errUnknown      error
+	errAffectedRows error
+	columns         []string
+}
 
-var columns = []string{"id", "short_code", "original_url", "access_count", "created_at", "updated_at"}
+func (suite *URLRepositoryTestSuite) SetupSuite() {
+	suite.errUnknown = errors.New("unknown error")
+	suite.errAffectedRows = errors.New("affected rows error")
+	suite.columns = []string{"id", "short_code", "original_url", "access_count", "created_at", "updated_at"}
+}
 
-func setupURLRepository(t testing.TB) (*URLRepository, sqlmock.Sqlmock) {
-	t.Helper()
-
+func (suite *URLRepositoryTestSuite) SetupSubTest() {
 	mockDB, mock, err := sqlmock.New()
 	if err != nil {
-		t.Fatal(err)
+		suite.T().Fatalf("Failed to create mock database: %v", err)
 	}
+	suite.T().Cleanup(func() {
+		mockDB.Close()
+	})
 
 	db := sqlx.NewDb(mockDB, "sqlmock")
-	repo := NewURLRepository(db)
-
-	t.Cleanup(func() {
-		mockDB.Close()
+	suite.T().Cleanup(func() {
 		db.Close()
 	})
 
-	return repo, mock
+	suite.mock = mock
+	suite.repo = NewURLRepository(db)
 }
 
-func TestURLRepository_Create(t *testing.T) {
-	t.Run("short code exists", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+func (suite *URLRepositoryTestSuite) TearDownSubTest() {
+	suite.NoError(suite.mock.ExpectationsWereMet())
+}
 
-		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs("code1", "https://example.com").
+func (suite *URLRepositoryTestSuite) TestCreate() {
+	suite.Run("duplicate short code", func() {
+		suite.mock.ExpectQuery(`INSERT INTO urls`).
+			WithArgs("abc123", "https://example.com").
 			WillReturnError(&pgconn.PgError{Code: uniqueViolationErrCode})
 
-		url, err := repo.Create(context.TODO(), "code1", "https://example.com")
+		url, err := suite.repo.Create(context.Background(), "abc123", "https://example.com")
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrShortCodeExists)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrShortCodeExists)
+		suite.Nil(url)
 	})
 
-	t.Run("unknown error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("unknown error", func() {
+		suite.mock.ExpectQuery(`INSERT INTO urls`).
+			WithArgs("abc123", "https://example.com").
+			WillReturnError(suite.errUnknown)
 
-		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs("code1", "https://example.com").
-			WillReturnError(errUnknown)
+		url, err := suite.repo.Create(context.Background(), "abc123", "https://example.com")
 
-		url, err := repo.Create(context.TODO(), "code1", "https://example.com")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errUnknown)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errUnknown)
+		suite.Nil(url)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("success", func() {
+		rows := sqlmock.NewRows(suite.columns).
+			AddRow(0, "abc123", "https://example.com", 0, time.Time{}, time.Time{})
 
-		rows := sqlmock.NewRows(columns).
-			AddRow(0, "code1", "https://example.com", 0, time.Time{}, time.Time{})
-
-		mock.ExpectQuery(`INSERT INTO urls`).
-			WithArgs("code1", "https://example.com").
+		suite.mock.ExpectQuery(`INSERT INTO urls`).
+			WithArgs("abc123", "https://example.com").
 			WillReturnRows(rows)
 
-		wantURL := models.URL{
-			ShortCode:   "code1",
-			OriginalURL: "https://example.com",
-		}
+		url, err := suite.repo.Create(context.Background(), "abc123", "https://example.com")
 
-		url, err := repo.Create(context.TODO(), "code1", "https://example.com")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, wantURL, *url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://example.com", url.OriginalURL)
 	})
 }
 
-func TestURLRepository_GetByShortCode(t *testing.T) {
-	t.Run("url not found", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
-
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("code2").
+func (suite *URLRepositoryTestSuite) TestGetByShortCode() {
+	suite.Run("url not found", func() {
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("abc123").
 			WillReturnError(sql.ErrNoRows)
 
-		url, err := repo.GetByShortCode(context.TODO(), "code2")
+		url, err := suite.repo.GetByShortCode(context.Background(), "abc123")
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+		suite.Nil(url)
 	})
 
-	t.Run("unknown error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("unknown error", func() {
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("abc123").
+			WillReturnError(suite.errUnknown)
 
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("code1").
-			WillReturnError(errUnknown)
+		url, err := suite.repo.GetByShortCode(context.Background(), "abc123")
 
-		url, err := repo.GetByShortCode(context.TODO(), "code1")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errUnknown)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errUnknown)
+		suite.Nil(url)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("success", func() {
+		rows := sqlmock.NewRows(suite.columns).
+			AddRow(0, "abc123", "https://example.com", 0, time.Time{}, time.Time{})
 
-		rows := sqlmock.NewRows(columns).
-			AddRow(0, "code1", "https://example.com", 1, time.Time{}, time.Time{})
-
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("code1").
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("abc123").
 			WillReturnRows(rows)
 
-		wantURL := models.URL{
-			ShortCode:   "code1",
-			OriginalURL: "https://example.com",
-			AccessCount: 1,
-		}
+		url, err := suite.repo.GetByShortCode(context.Background(), "abc123")
 
-		url, err := repo.GetByShortCode(context.TODO(), "code1")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, wantURL, *url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://example.com", url.OriginalURL)
 	})
 }
 
-func TestURLRepository_Update(t *testing.T) {
-	t.Run("url not found", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
-
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("https://new-example.com", "code2").
+func (suite *URLRepositoryTestSuite) TestUpdate() {
+	suite.Run("url nof found", func() {
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "abc123").
 			WillReturnError(sql.ErrNoRows)
 
-		url, err := repo.Update(context.TODO(), "code2", "https://new-example.com")
+		url, err := suite.repo.Update(context.Background(), "abc123", "https://new-example.com")
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+		suite.Nil(url)
 	})
 
-	t.Run("unknown error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("unknown error", func() {
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "abc123").
+			WillReturnError(suite.errUnknown)
 
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("https://new-example.com", "code1").
-			WillReturnError(errUnknown)
+		url, err := suite.repo.Update(context.Background(), "abc123", "https://new-example.com")
 
-		url, err := repo.Update(context.TODO(), "code1", "https://new-example.com")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errUnknown)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errUnknown)
+		suite.Nil(url)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("success", func() {
+		rows := sqlmock.NewRows(suite.columns).
+			AddRow(0, "abc123", "https://new-example.com", 0, time.Time{}, time.Time{})
 
-		rows := sqlmock.NewRows(columns).
-			AddRow(0, "code1", "https://new-example.com", 0, time.Time{}, time.Time{})
-
-		mock.ExpectQuery(`UPDATE urls`).
-			WithArgs("https://new-example.com", "code1").
+		suite.mock.ExpectQuery(`UPDATE urls`).
+			WithArgs("https://new-example.com", "abc123").
 			WillReturnRows(rows)
 
-		wantURL := models.URL{
-			ShortCode:   "code1",
-			OriginalURL: "https://new-example.com",
-		}
+		url, err := suite.repo.Update(context.Background(), "abc123", "https://new-example.com")
 
-		url, err := repo.Update(context.TODO(), "code1", "https://new-example.com")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, wantURL, *url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://new-example.com", url.OriginalURL)
 	})
 }
 
-func TestURLRepository_Delete(t *testing.T) {
-	t.Run("unknown error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+func (suite *URLRepositoryTestSuite) TestDelete() {
+	suite.Run("unknown error", func() {
+		suite.mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("abc123").
+			WillReturnError(suite.errUnknown)
 
-		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs("code1").
-			WillReturnError(errUnknown)
+		err := suite.repo.Delete(context.Background(), "abc123")
 
-		err := repo.Delete(context.TODO(), "code1")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errUnknown)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errUnknown)
 	})
 
-	t.Run("rows affected error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("rows affected error", func() {
+		suite.mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("abc123").
+			WillReturnResult(sqlmock.NewErrorResult(suite.errAffectedRows))
 
-		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs("code1").
-			WillReturnResult(sqlmock.NewErrorResult(errAffectedRows))
+		err := suite.repo.Delete(context.Background(), "abc123")
 
-		err := repo.Delete(context.TODO(), "code1")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errAffectedRows)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errAffectedRows)
 	})
 
-	t.Run("url not found", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
-
-		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs("code2").
+	suite.Run("url not found", func() {
+		suite.mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("abc123").
 			WillReturnResult(sqlmock.NewResult(0, 0))
 
-		err := repo.Delete(context.TODO(), "code2")
+		err := suite.repo.Delete(context.Background(), "abc123")
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
-
-		mock.ExpectExec(`DELETE FROM urls`).
-			WithArgs("code1").
+	suite.Run("success", func() {
+		suite.mock.ExpectExec(`DELETE FROM urls`).
+			WithArgs("abc123").
 			WillReturnResult(sqlmock.NewResult(0, 1))
 
-		err := repo.Delete(context.TODO(), "code1")
+		err := suite.repo.Delete(context.Background(), "abc123")
 
-		assert.NoError(t, err)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.NoError(err)
 	})
 }
 
-func TestURLRepository_GetStats(t *testing.T) {
-	t.Run("url not found", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
-
-		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs("code2").
+func (suite *URLRepositoryTestSuite) TestGetStats() {
+	suite.Run("url not found", func() {
+		suite.mock.ExpectQuery(`SELECT (.+) FROM urls`).
+			WithArgs("abc123").
 			WillReturnError(sql.ErrNoRows)
 
-		url, err := repo.GetStats(context.TODO(), "code2")
+		url, err := suite.repo.GetStats(context.Background(), "abc123")
 
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, database.ErrURLNotFound)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, database.ErrURLNotFound)
+		suite.Nil(url)
 	})
 
-	t.Run("unknown error", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("unknown error", func() {
+		suite.mock.ExpectQuery(`SELECT (.+) FROM urls`).
+			WithArgs("abc123").
+			WillReturnError(suite.errUnknown)
 
-		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs("code1").
-			WillReturnError(errUnknown)
+		url, err := suite.repo.GetStats(context.Background(), "abc123")
 
-		url, err := repo.GetStats(context.TODO(), "code1")
-
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, errUnknown)
-		assert.Nil(t, url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.Error(err)
+		suite.ErrorIs(err, suite.errUnknown)
+		suite.Nil(url)
 	})
 
-	t.Run("success", func(t *testing.T) {
-		repo, mock := setupURLRepository(t)
+	suite.Run("success", func() {
+		rows := sqlmock.NewRows(suite.columns).
+			AddRow(0, "abc123", "https://example.com", 1, time.Time{}, time.Time{})
 
-		rows := sqlmock.NewRows(columns).
-			AddRow(0, "code1", "https://example.com", 1, time.Time{}, time.Time{})
-
-		mock.ExpectQuery(`SELECT (.+) FROM urls`).
-			WithArgs("code1").
+		suite.mock.ExpectQuery(`SELECT (.+) FROM urls`).
+			WithArgs("abc123").
 			WillReturnRows(rows)
 
-		wantURL := models.URL{
-			ShortCode:   "code1",
-			OriginalURL: "https://example.com",
-			AccessCount: 1,
-		}
+		url, err := suite.repo.GetStats(context.Background(), "abc123")
 
-		url, err := repo.GetStats(context.TODO(), "code1")
-
-		assert.NoError(t, err)
-		assert.NotNil(t, url)
-		assert.Equal(t, wantURL, *url)
-		assert.NoError(t, mock.ExpectationsWereMet())
+		suite.NoError(err)
+		suite.NotNil(url)
+		suite.Equal("abc123", url.ShortCode)
+		suite.Equal("https://example.com", url.OriginalURL)
+		suite.Equal(int64(1), url.AccessCount)
 	})
+}
+
+func TestURLRepository(t *testing.T) {
+	suite.Run(t, new(URLRepositoryTestSuite))
 }

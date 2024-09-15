@@ -25,7 +25,7 @@ type urlRecord struct {
 
 // toURL converts a urlRecord struct to a models.URL struct. This is used to transform
 // data from the database format to the business layer format.
-func (r *urlRecord) ToURL() *models.URL {
+func (r *urlRecord) toURL() *models.URL {
 	return &models.URL{
 		ID:          r.ID,
 		ShortCode:   r.ShortCode,
@@ -70,7 +70,7 @@ func (r *URLRepository) Create(ctx context.Context, shortCode, originalURL strin
 		return nil, fmt.Errorf("%s: failed to create url record: %w", op, err)
 	}
 
-	return rec.ToURL(), nil
+	return rec.toURL(), nil
 }
 
 // GetByShortCode retrieves a URL record from the database by its short code. It increments the
@@ -94,7 +94,7 @@ func (r *URLRepository) GetByShortCode(ctx context.Context, shortCode string) (*
 		return nil, fmt.Errorf("%s: failed to get url record: %w", op, err)
 	}
 
-	return rec.ToURL(), nil
+	return rec.toURL(), nil
 }
 
 // Update modifies the URL associated with the given short code. If the alias doesn't exist, it
@@ -117,7 +117,7 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 		return nil, fmt.Errorf("%s: failed to update url record: %w", op, err)
 	}
 
-	return rec.ToURL(), nil
+	return rec.toURL(), nil
 }
 
 // Delete removes a URL record from the database by its short code. If the short code doesn't
@@ -164,5 +164,5 @@ func (r *URLRepository) GetStats(ctx context.Context, shortCode string) (*models
 		return nil, fmt.Errorf("%s: failed to get url record: %w", op, err)
 	}
 
-	return rec.ToURL(), nil
+	return rec.toURL(), nil
 }
