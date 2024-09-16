@@ -11,12 +11,16 @@ import (
 	"os/signal"
 
 	"github.com/go-chi/httplog/v2"
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/vadimbarashkov/url-shortener/internal/config"
 	"github.com/vadimbarashkov/url-shortener/internal/database/postgres"
 	"github.com/vadimbarashkov/url-shortener/internal/service"
 	"golang.org/x/sync/errgroup"
 
 	api "github.com/vadimbarashkov/url-shortener/internal/api/http/v1"
+
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func main() {
@@ -30,12 +34,9 @@ func main() {
 }
 
 const (
-	// envDev is a constant string representing the development environment.
-	envDev = "dev"
-	// envStage is a constant string representing the staging environment.
+	envDev   = "dev"
 	envStage = "stg"
-	// envProd is a constant string representing the production environment.
-	envProd = "prod"
+	envProd  = "prod"
 )
 
 // setupLogger configures and returns an HTTP logger based on the provided environment.
@@ -63,6 +64,24 @@ func setupLogger(env string) *httplog.Logger {
 	return logger
 }
 
+const migrationsPath = "file://migrations"
+
+// runMigrations runs a database migration if necessary.
+func runMigrations(cfg config.Postgres) error {
+	const op = "runMigrations"
+
+	m, err := migrate.New(migrationsPath, cfg.DSN())
+	if err != nil {
+		return fmt.Errorf("%s: failed to initialize migrations: %w", op, err)
+	}
+
+	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return fmt.Errorf("%s: failed to run migrations: %w", op, err)
+	}
+
+	return nil
+}
+
 // run initializes the application, sets up services, and starts the HTTP server.
 func run(ctx context.Context) error {
 	cfg, err := config.Load(os.Getenv("CONFIG_PATH"))
@@ -80,6 +99,10 @@ func run(ctx context.Context) error {
 		<-ctx.Done()
 		return db.Close()
 	})
+
+	if err := runMigrations(cfg.Postgres); err != nil {
+		return err
+	}
 
 	urlRepo := postgres.NewURLRepository(db)
 	urlSvc := service.NewURLService(urlRepo, cfg.ShortCodeLength)
