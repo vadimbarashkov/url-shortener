@@ -117,7 +117,6 @@ func TestServer_Addr(t *testing.T) {
 	s := Server{Port: 8443}
 
 	wantAddr := ":8443"
-
 	assert.Equal(t, wantAddr, s.Addr())
 }
 
@@ -132,6 +131,5 @@ func TestPostgres_DSN(t *testing.T) {
 	}
 
 	wantDSN := "postgres://test_user:test_pass@localhost:5432/test_db?sslmode=disable"
-
 	assert.Equal(t, wantDSN, p.DSN())
 }

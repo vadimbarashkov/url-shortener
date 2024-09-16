@@ -28,7 +28,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Build binary
-        run: go build -v ./...
+        run: make build
 
   lint:
     strategy:
@@ -68,5 +68,8 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Run unit and integration tests
-        run: go test -v -cover -race ./...
+      - name: Run unit tests
+        run: make test/unit
+
+      - name: Run integration tests
+        run: make test/integration
