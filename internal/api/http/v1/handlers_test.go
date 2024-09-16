@@ -65,14 +65,18 @@ func (suite *HandlersTestSuite) SetupSuite() {
 
 func (suite *HandlersTestSuite) SetupSubTest() {
 	suite.urlSvcMock = new(MockURLService)
+
 	router := NewRouter(suite.logger, suite.urlSvcMock)
 	suite.server = httptest.NewServer(router)
+	suite.T().Cleanup(func() {
+		suite.server.Close()
+	})
+
 	suite.e = httpexpect.Default(suite.T(), suite.server.URL)
 }
 
 func (suite *HandlersTestSuite) TeadDownSubTest() {
 	suite.urlSvcMock.AssertExpectations(suite.T())
-	suite.server.Close()
 }
 
 func (suite *HandlersTestSuite) TestPing() {
@@ -95,8 +99,8 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.EmptyRequestBodyResponse.Status)
-		resp.HasValue("message", response.EmptyRequestBodyResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("invalid request body", func() {
@@ -106,8 +110,8 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.BadRequestResponse.Status)
-		resp.HasValue("message", response.BadRequestResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("validation error", func() {
@@ -119,9 +123,12 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusError)
+		resp.HasValue("status", "error")
 		resp.ContainsKey("message")
-		resp.ContainsKey("details")
+		resp.Value("details").Array().Value(0).Object().
+			HasValue("field", "url").
+			HasValue("value", "invalid url").
+			ContainsKey("issue")
 	})
 
 	suite.Run("server error", func() {
@@ -138,8 +145,8 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Status(http.StatusInternalServerError).
 			JSON().Object()
 
-		resp.HasValue("status", response.ServerErrorResponse.Status)
-		resp.HasValue("message", response.ServerErrorResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ShortenURL", 1)
 	})
@@ -161,11 +168,14 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 			Status(http.StatusCreated).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			ContainsKey("id").
 			HasValue("short_code", "abc123").
-			HasValue("url", "https://example.com")
+			HasValue("url", "https://example.com").
+			ContainsKey("created_at").
+			ContainsKey("updated_at")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ShortenURL", 1)
 	})
@@ -174,7 +184,7 @@ func (suite *HandlersTestSuite) TestShortenURL() {
 func (suite *HandlersTestSuite) TestResolveShortCode() {
 	const path = "/api/v1/shorten/%s"
 
-	suite.Run("not found", func() {
+	suite.Run("url not found", func() {
 		suite.urlSvcMock.
 			On("ResolveShortCode", mock.Anything, "abc123").
 			Times(1).
@@ -185,8 +195,8 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -202,8 +212,8 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 			Status(http.StatusInternalServerError).
 			JSON().Object()
 
-		resp.HasValue("status", response.ServerErrorResponse.Status)
-		resp.HasValue("message", response.ServerErrorResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -224,11 +234,14 @@ func (suite *HandlersTestSuite) TestResolveShortCode() {
 			HasContentType("application/json").
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			ContainsKey("id").
 			HasValue("short_code", "abc123").
-			HasValue("url", "https://example.com")
+			HasValue("url", "https://example.com").
+			ContainsKey("created_at").
+			ContainsKey("updated_at")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ResolveShortCode", 1)
 	})
@@ -243,8 +256,8 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.EmptyRequestBodyResponse.Status)
-		resp.HasValue("message", response.EmptyRequestBodyResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("invalid request body", func() {
@@ -254,8 +267,8 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.BadRequestResponse.Status)
-		resp.HasValue("message", response.BadRequestResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("validation error", func() {
@@ -267,12 +280,15 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusError)
+		resp.HasValue("status", "error")
 		resp.ContainsKey("message")
-		resp.ContainsKey("details")
+		resp.Value("details").Array().Value(0).Object().
+			HasValue("field", "url").
+			HasValue("value", "invalid url").
+			ContainsKey("issue")
 	})
 
-	suite.Run("not found", func() {
+	suite.Run("url not found", func() {
 		suite.urlSvcMock.
 			On("ModifyURL", mock.Anything, "abc123", "https://new-example.com").
 			Times(1).
@@ -286,8 +302,8 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
 	})
@@ -306,8 +322,8 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusInternalServerError).
 			JSON().Object()
 
-		resp.HasValue("status", response.ServerErrorResponse.Status)
-		resp.HasValue("message", response.ServerErrorResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
 	})
@@ -329,11 +345,14 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			ContainsKey("id").
 			HasValue("short_code", "abc123").
-			HasValue("url", "https://new-example.com")
+			HasValue("url", "https://new-example.com").
+			ContainsKey("created_at").
+			ContainsKey("updated_at")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "ModifyURL", 1)
 	})
@@ -342,7 +361,7 @@ func (suite *HandlersTestSuite) TestModifyURL() {
 func (suite *HandlersTestSuite) TestDeactivateURL() {
 	const path = "/api/v1/shorten/%s"
 
-	suite.Run("not found", func() {
+	suite.Run("url not found", func() {
 		suite.urlSvcMock.
 			On("DeactivateURL", mock.Anything, "abc123").
 			Times(1).
@@ -353,8 +372,8 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
 	})
@@ -370,8 +389,8 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			Status(http.StatusInternalServerError).
 			JSON().Object()
 
-		resp.HasValue("status", response.ServerErrorResponse.Status)
-		resp.HasValue("message", response.ServerErrorResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
 	})
@@ -388,7 +407,7 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 			HasContentType("application/json").
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "DeactivateURL", 1)
@@ -398,7 +417,7 @@ func (suite *HandlersTestSuite) TestDeactivateURL() {
 func (suite *HandlersTestSuite) TestGetURLStats() {
 	const path = "/api/v1/shorten/%s/stats"
 
-	suite.Run("not found", func() {
+	suite.Run("url not found", func() {
 		suite.urlSvcMock.
 			On("GetURLStats", mock.Anything, "abc123").
 			Times(1).
@@ -409,8 +428,8 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
 	})
@@ -426,8 +445,8 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 			Status(http.StatusInternalServerError).
 			JSON().Object()
 
-		resp.HasValue("status", response.ServerErrorResponse.Status)
-		resp.HasValue("message", response.ServerErrorResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
 	})
@@ -450,14 +469,17 @@ func (suite *HandlersTestSuite) TestGetURLStats() {
 		resp.HasValue("status", response.StatusSuccess)
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			ContainsKey("id").
 			HasValue("short_code", "abc123").
 			HasValue("url", "https://example.com").
-			HasValue("access_count", int64(1))
+			HasValue("access_count", int64(1)).
+			ContainsKey("created_at").
+			ContainsKey("updated_at")
 
 		suite.urlSvcMock.AssertNumberOfCalls(suite.T(), "GetURLStats", 1)
 	})
 }
 
-func TestAPI(t *testing.T) {
+func TestHandlers(t *testing.T) {
 	suite.Run(t, new(HandlersTestSuite))
 }

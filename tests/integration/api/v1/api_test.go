@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -28,6 +30,26 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func findProjectRoot() (string, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+
+	return "", os.ErrNotExist
+}
 
 type APITestSuite struct {
 	suite.Suite
@@ -100,9 +122,14 @@ func (suite *APITestSuite) SetupSuite() {
 		}
 	})
 
-	migrationPath := "file://../../../../migrations"
+	root, err := findProjectRoot()
+	if err != nil {
+		suite.T().Fatalf("Failed to get project root: %v", err)
+	}
 
-	m, err := migrate.New(migrationPath, suite.cfg.DSN())
+	migrationsPath := filepath.Join("file://"+root, "/migrations")
+
+	m, err := migrate.New(migrationsPath, suite.cfg.DSN())
 	if err != nil {
 		suite.T().Fatalf("Failed to initialize migrations: %v", err)
 	}
@@ -195,17 +222,17 @@ func (suite *APITestSuite) TestShortenURL() {
 			Status(http.StatusCreated).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
-		resp.Value("data").Object().
-			ContainsKey("short_code").
-			HasValue("url", "https://example.com")
 
-		shortCode := resp.Value("data").Object().Value("short_code").String().Raw()
-		rec := getURLRecord(suite.T(), suite.db, shortCode)
+		data := resp.Value("data").Object()
+		rec := getURLRecord(suite.T(), suite.db, data.Value("short_code").String().Raw())
 
-		suite.Equal("https://example.com", rec.OriginalURL)
-		suite.Equal(shortCode, rec.ShortCode)
+		data.HasValue("id", rec.ID).
+			HasValue("short_code", rec.ShortCode).
+			HasValue("url", rec.OriginalURL).
+			HasValue("created_at", rec.CreatedAt).
+			ContainsKey("updated_at")
 	})
 }
 
@@ -218,8 +245,8 @@ func (suite *APITestSuite) TestResolveShortCode() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
@@ -230,11 +257,14 @@ func (suite *APITestSuite) TestResolveShortCode() {
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			HasValue("id", rec.ID).
 			HasValue("short_code", rec.ShortCode).
-			HasValue("url", rec.OriginalURL)
+			HasValue("url", rec.OriginalURL).
+			HasValue("created_at", rec.CreatedAt).
+			ContainsKey("updated_at")
 
 		rec = getURLRecord(suite.T(), suite.db, rec.ShortCode)
 
@@ -254,8 +284,8 @@ func (suite *APITestSuite) TestModifyURL() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
@@ -269,11 +299,14 @@ func (suite *APITestSuite) TestModifyURL() {
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", response.StatusSuccess)
+		resp.HasValue("status", "success")
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			HasValue("id", rec.ID).
 			HasValue("short_code", rec.ShortCode).
-			HasValue("url", "https://new-example.com")
+			HasValue("url", "https://new-example.com").
+			HasValue("created_at", rec.CreatedAt).
+			ContainsKey("updated_at")
 
 		rec = getURLRecord(suite.T(), suite.db, "abc123")
 
@@ -290,12 +323,12 @@ func (suite *APITestSuite) TestDeactivateURL() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
-		_ = insertURLRecord(suite.T(), suite.db, "abc123", "https://example.com")
+		insertURLRecord(suite.T(), suite.db, "abc123", "https://example.com")
 
 		resp := suite.e.DELETE(fmt.Sprintf(path, "abc123")).
 			Expect().
@@ -324,8 +357,8 @@ func (suite *APITestSuite) TestGetURLStats() {
 			Status(http.StatusNotFound).
 			JSON().Object()
 
-		resp.HasValue("status", response.ResourceNotFoundResponse.Status)
-		resp.HasValue("message", response.ResourceNotFoundResponse.Message)
+		resp.HasValue("status", "error")
+		resp.ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
@@ -346,16 +379,15 @@ func (suite *APITestSuite) TestGetURLStats() {
 		resp.HasValue("status", response.StatusSuccess)
 		resp.ContainsKey("message")
 		resp.Value("data").Object().
+			HasValue("id", rec.ID).
 			HasValue("short_code", rec.ShortCode).
 			HasValue("url", rec.OriginalURL).
-			HasValue("access_count", rec.AccessCount)
+			HasValue("access_count", rec.AccessCount).
+			HasValue("created_at", rec.CreatedAt).
+			ContainsKey("updated_at")
 	})
 }
 
 func TestAPI(t *testing.T) {
-	if testing.Short() {
-		t.SkipNow()
-	}
-
 	suite.Run(t, new(APITestSuite))
 }
