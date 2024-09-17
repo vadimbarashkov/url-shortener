@@ -32,7 +32,7 @@ type urlResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
 	URL         string    `json:"url"`
-	AccessCount int64     `json:"access_count"`
+	AccessCount *int64    `json:"access_count,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 }
@@ -231,7 +231,7 @@ func handleGetURLStats(svc URLService) http.HandlerFunc {
 		}
 
 		data := toURLResponse(url)
-		data.AccessCount = url.AccessCount
+		data.AccessCount = &url.AccessCount
 
 		render.Status(r, http.StatusOK)
 		render.JSON(w, r, response.SuccessResponse(successMsg, data))
