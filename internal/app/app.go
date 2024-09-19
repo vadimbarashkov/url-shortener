@@ -4,12 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 
+	"github.com/go-chi/httplog/v2"
 	"github.com/vadimbarashkov/url-shortener/internal/config"
+	"github.com/vadimbarashkov/url-shortener/internal/usecase"
 	"github.com/vadimbarashkov/url-shortener/pkg/postgres"
 	"golang.org/x/sync/errgroup"
+
+	api "github.com/vadimbarashkov/url-shortener/internal/adapter/delivery/http"
+	repo "github.com/vadimbarashkov/url-shortener/internal/adapter/repository/postgres"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
@@ -32,9 +38,15 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		return fmt.Errorf("%s: failed to run migrations: %w", op, err)
 	}
 
+	urlRepo := repo.NewURLRepository(db)
+	urlUseCase := usecase.NewURLUseCase(cfg.ShortCodeLength, urlRepo)
+
+	logger := setupLogger(cfg.Env)
+	r := api.NewRouter(logger, urlUseCase)
+
 	server := &http.Server{
 		Addr:           cfg.HTTPServer.Addr(),
-		Handler:        nil,
+		Handler:        r,
 		ReadTimeout:    cfg.HTTPServer.ReadTimeout,
 		WriteTimeout:   cfg.HTTPServer.WriteTimeout,
 		IdleTimeout:    cfg.HTTPServer.IdleTimeout,
@@ -74,4 +86,28 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	})
 
 	return g.Wait()
+}
+
+func setupLogger(env string) *httplog.Logger {
+	opt := httplog.Options{
+		LogLevel:        slog.LevelDebug,
+		Concise:         true,
+		RequestHeaders:  true,
+		ResponseHeaders: true,
+	}
+
+	switch env {
+	case config.EnvStage:
+		opt.JSON = true
+	case config.EnvProd:
+		opt.LogLevel = slog.LevelInfo
+		opt.JSON = true
+	default:
+		env = config.EnvDev
+	}
+
+	logger := httplog.NewLogger("url-shortener", opt)
+	logger.Logger = logger.With(slog.String("env", env))
+
+	return logger
 }

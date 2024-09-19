@@ -25,7 +25,7 @@ type URLUseCase struct {
 	urlRepo         urlRepository
 }
 
-func New(shortCodeLength int, urlRepo urlRepository) *URLUseCase {
+func NewURLUseCase(shortCodeLength int, urlRepo urlRepository) *URLUseCase {
 	return &URLUseCase{
 		shortCodeLength: shortCodeLength,
 		urlRepo:         urlRepo,
