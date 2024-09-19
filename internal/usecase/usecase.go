@@ -14,8 +14,8 @@ var ErrMaxRetriesExceeded = errors.New("maximum retries exceeded for generating 
 
 type urlRepository interface {
 	Save(ctx context.Context, shortCode, originalURL string) (*entity.URL, error)
-	RetriveByShortCode(ctx context.Context, shortCode string) (*entity.URL, error)
-	RetriveAndUpdateStats(ctx context.Context, shortCode string) (*entity.URL, error)
+	RetrieveByShortCode(ctx context.Context, shortCode string) (*entity.URL, error)
+	RetrieveAndUpdateStats(ctx context.Context, shortCode string) (*entity.URL, error)
 	Update(ctx context.Context, shortCode, originalURL string) (*entity.URL, error)
 	Remove(ctx context.Context, shortCode string) error
 }
@@ -65,7 +65,7 @@ func (uc *URLUseCase) ShortenURL(ctx context.Context, originalURL string) (*enti
 func (uc *URLUseCase) ResolveShortCode(ctx context.Context, shortCode string) (*entity.URL, error) {
 	const op = "usecase.URLUseCase.ResolveShortCode"
 
-	url, err := uc.urlRepo.RetriveAndUpdateStats(ctx, shortCode)
+	url, err := uc.urlRepo.RetrieveAndUpdateStats(ctx, shortCode)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to resolve short code: %w", op, err)
 	}
@@ -98,7 +98,7 @@ func (uc *URLUseCase) DeactivateURL(ctx context.Context, shortCode string) error
 func (uc *URLUseCase) GetURLStats(ctx context.Context, shortCode string) (*entity.URL, error) {
 	const op = "usecase.URLUseCase.GetURLStats"
 
-	url, err := uc.urlRepo.RetriveByShortCode(ctx, shortCode)
+	url, err := uc.urlRepo.RetrieveByShortCode(ctx, shortCode)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed to get url stats: %w", op, err)
 	}
