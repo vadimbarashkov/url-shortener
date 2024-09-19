@@ -33,8 +33,8 @@ type HTTPServer struct {
 
 var defaultHTTPServer = HTTPServer{
 	Port:           8080,
-	ReadTimeout:    time.Second,
-	WriteTimeout:   2 * time.Second,
+	ReadTimeout:    5 * time.Second,
+	WriteTimeout:   10 * time.Second,
 	IdleTimeout:    time.Minute,
 	MaxHeaderBytes: 1 << 20,
 }
@@ -44,18 +44,26 @@ func (s *HTTPServer) Addr() string {
 }
 
 type Postgres struct {
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	DB       string `yaml:"db"`
-	SSLMode  string `yaml:"sslmode"`
+	User            string        `yaml:"user"`
+	Password        string        `yaml:"password"`
+	Host            string        `yaml:"host"`
+	Port            int           `yaml:"port"`
+	DB              string        `yaml:"db"`
+	SSLMode         string        `yaml:"sslmode"`
+	ConnMaxIdleTime time.Duration `yaml:"conn_max_idle_time"`
+	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
+	MaxIdleConns    int           `yaml:"max_idle_conns"`
+	MaxOpenConns    int           `yaml:"max_idle_conns"`
 }
 
 var defaultPostgres = Postgres{
-	Host:    "localhost",
-	Port:    5432,
-	SSLMode: "disable",
+	Host:            "localhost",
+	Port:            5432,
+	SSLMode:         "disable",
+	ConnMaxIdleTime: 5 * time.Minute,
+	ConnMaxLifetime: 30 * time.Minute,
+	MaxIdleConns:    5,
+	MaxOpenConns:    25,
 }
 
 func (p *Postgres) DSN() string {
