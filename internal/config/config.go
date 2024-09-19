@@ -53,7 +53,7 @@ type Postgres struct {
 	ConnMaxIdleTime time.Duration `yaml:"conn_max_idle_time"`
 	ConnMaxLifetime time.Duration `yaml:"conn_max_lifetime"`
 	MaxIdleConns    int           `yaml:"max_idle_conns"`
-	MaxOpenConns    int           `yaml:"max_idle_conns"`
+	MaxOpenConns    int           `yaml:"max_open_conns"`
 }
 
 var defaultPostgres = Postgres{
