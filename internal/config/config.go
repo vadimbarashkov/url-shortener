@@ -12,6 +12,8 @@ const (
 	EnvDev   = "dev"
 	EnvStage = "stage"
 	EnvProd  = "prod"
+
+	defaultShortCodeLength = 7
 )
 
 type Config struct {
@@ -92,7 +94,7 @@ func Load(path string) (*Config, error) {
 
 func setDefaults(cfg *Config) {
 	cfg.Env = EnvDev
-	cfg.ShortCodeLength = 7
+	cfg.ShortCodeLength = defaultShortCodeLength
 	cfg.HTTPServer = defaultHTTPServer
 	cfg.Postgres = defaultPostgres
 }
