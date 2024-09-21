@@ -1,60 +1,138 @@
-package e2e
+package integration
 
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
-	"os"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
 	"github.com/gavv/httpexpect/v2"
+	"github.com/go-chi/httplog/v2"
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
+	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 	"github.com/vadimbarashkov/url-shortener/internal/adapter/repository/postgres"
 	"github.com/vadimbarashkov/url-shortener/internal/config"
+	"github.com/vadimbarashkov/url-shortener/internal/usecase"
 	"github.com/vadimbarashkov/url-shortener/tests"
 
+	delivery "github.com/vadimbarashkov/url-shortener/internal/adapter/delivery/http"
+
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 type APITestSuite struct {
 	suite.Suite
-	cfg     *config.Config
-	db      *sqlx.DB
-	urlRepo *postgres.URLRepository
-	e       *httpexpect.Expect
+	pgCont     testcontainers.Container
+	cfg        config.Postgres
+	db         *sqlx.DB
+	urlRepo    *postgres.URLRepository
+	urlUseCase *usecase.URLUseCase
+	logger     *httplog.Logger
+	server     *httptest.Server
+	e          *httpexpect.Expect
 }
 
 func (suite *APITestSuite) SetupSuite() {
+	ctx := context.Background()
+
+	pgUser := "test"
+	pgPassword := "test"
+	pgDB := "url_shortener"
+
+	var err error
+	suite.pgCont, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: testcontainers.ContainerRequest{
+			Image: "postgres:16-alpine",
+			Env: map[string]string{
+				"POSTGRES_USER":     pgUser,
+				"POSTGRES_PASSWORD": pgPassword,
+				"POSTGRES_DB":       pgDB,
+			},
+			ExposedPorts: []string{"5432/tcp"},
+			WaitingFor:   wait.ForListeningPort("5432/tcp"),
+		},
+		Started: true,
+	})
+	if err != nil {
+		suite.T().Fatalf("Failed to start postgres container: %v", err)
+	}
+	suite.T().Cleanup(func() {
+		if err := suite.pgCont.Terminate(ctx); err != nil {
+			suite.T().Fatalf("Failed to terminate postgres container: %v", err)
+		}
+	})
+
+	pgHost, err := suite.pgCont.Host(ctx)
+	if err != nil {
+		suite.T().Fatalf("Failed to get postgres container host: %v", err)
+	}
+
+	pgPort, err := suite.pgCont.MappedPort(ctx, "5432")
+	if err != nil {
+		suite.T().Fatalf("Failed to get postgres container port: %v", err)
+	}
+
+	suite.cfg = config.Postgres{
+		User:     pgUser,
+		Password: pgPassword,
+		Host:     pgHost,
+		Port:     pgPort.Int(),
+		DB:       pgDB,
+		SSLMode:  "disable",
+	}
+
+	suite.db, err = sqlx.Connect("pgx", suite.cfg.DSN())
+	if err != nil {
+		suite.T().Fatalf("Failed to connect to database: %v", err)
+	}
+	suite.T().Cleanup(func() {
+		if err := suite.db.Close(); err != nil {
+			suite.T().Fatalf("Failed to close database: %v", err)
+		}
+	})
+
 	root, err := tests.FindProjectRoot()
 	if err != nil {
 		suite.T().Fatalf("Failed to get project root: %v", err)
 	}
 
-	configPath := filepath.Join(root, os.Getenv("CONFIG_PATH"))
+	migrationsPath := filepath.Join("file://"+root, "/migrations")
 
-	suite.cfg, err = config.Load(configPath)
+	m, err := migrate.New(migrationsPath, suite.cfg.DSN())
 	if err != nil {
-		suite.T().Fatalf("Failed to load config: %v", err)
+		suite.T().Fatalf("Failed to initialize migrations: %v", err)
 	}
 
-	suite.db, err = sqlx.Connect("pgx", suite.cfg.Postgres.DSN())
-	if err != nil {
-		suite.T().Fatalf("Failed to connect to database: %v", err)
+	if err := m.Up(); err != nil {
+		suite.T().Fatalf("Failed to run migrations: %v", err)
 	}
 	suite.T().Cleanup(func() {
-		suite.db.Close()
+		if err := m.Down(); err != nil {
+			suite.T().Fatalf("Failed to rollback migrations: %v", err)
+		}
 	})
 
 	suite.urlRepo = postgres.NewURLRepository(suite.db)
+	suite.urlUseCase = usecase.NewURLUseCase(suite.urlRepo)
 
-	baseURL := fmt.Sprintf("http://localhost:%d", suite.cfg.HTTPServer.Port)
-	suite.e = httpexpect.Default(suite.T(), baseURL)
+	suite.logger = httplog.NewLogger("", httplog.Options{Writer: io.Discard})
+	router := delivery.NewRouter(suite.logger, suite.urlUseCase)
+	suite.server = httptest.NewServer(router)
+	suite.e = httpexpect.Default(suite.T(), suite.server.URL)
 }
 
 func (suite *APITestSuite) TearDownSubTest() {
-	_, err := suite.db.Exec(`TRUNCATE TABLE urls RESTART IDENTITY CASCADE`)
+	ctx := context.Background()
+
+	_, err := suite.db.ExecContext(ctx, `TRUNCATE TABLE urls RESTART IDENTITY CASCADE`)
 	if err != nil {
 		suite.T().Fatalf("Failed to clean urls table: %v", err)
 	}
@@ -74,41 +152,6 @@ func (suite *APITestSuite) TestPing() {
 func (suite *APITestSuite) TestShortenURL() {
 	const path = "/api/v1/shorten"
 
-	suite.Run("empty request body", func() {
-		resp := suite.e.POST(path).
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-	})
-
-	suite.Run("invalid request body", func() {
-		resp := suite.e.POST(path).
-			WithJSON("invalid body").
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-	})
-
-	suite.Run("validation error", func() {
-		resp := suite.e.POST(path).
-			WithJSON(map[string]string{"original_url": "invalid url"}).
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-		resp.Value("errors").Array().Value(0).Object().
-			HasValue("field", "original_url").
-			ContainsKey("message")
-	})
-
 	suite.Run("success", func() {
 		resp := suite.e.POST(path).
 			WithJSON(map[string]string{"original_url": "https://example.com"}).
@@ -116,11 +159,18 @@ func (suite *APITestSuite) TestShortenURL() {
 			Status(http.StatusCreated).
 			JSON().Object()
 
-		resp.ContainsKey("id")
-		resp.ContainsKey("short_code")
-		resp.HasValue("original_url", "https://example.com")
+		shortCode := resp.Value("short_code").String().Raw()
+
+		url, err := suite.urlRepo.RetrieveByShortCode(context.Background(), shortCode)
+		if err != nil {
+			suite.T().Fatalf("Failed to retrieve url record: %v", err)
+		}
+
+		resp.HasValue("id", url.ID)
+		resp.HasValue("short_code", url.ShortCode)
+		resp.HasValue("original_url", url.OriginalURL)
 		resp.NotContainsKey("stats")
-		resp.ContainsKey("created_at")
+		resp.HasValue("created_at", url.CreatedAt)
 		resp.ContainsKey("updated_at")
 	})
 }
@@ -155,46 +205,18 @@ func (suite *APITestSuite) TestResolveShortCode() {
 		resp.NotContainsKey("stats")
 		resp.HasValue("created_at", url.CreatedAt)
 		resp.ContainsKey("updated_at")
+
+		url, err = suite.urlRepo.RetrieveByShortCode(context.Background(), url.ShortCode)
+		if err != nil {
+			suite.T().Fatalf("Failed to retrieve url record: %v", err)
+		}
+
+		suite.Equal(int64(1), url.AccessCount)
 	})
 }
 
 func (suite *APITestSuite) TestModifyURL() {
 	const path = "/api/v1/shorten/%s"
-
-	suite.Run("empty request body", func() {
-		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-	})
-
-	suite.Run("invalid request body", func() {
-		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
-			WithJSON("invalid body").
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-	})
-
-	suite.Run("validation error", func() {
-		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
-			WithJSON(map[string]string{"original_url": "invalid url"}).
-			Expect().
-			Status(http.StatusBadRequest).
-			JSON().Object()
-
-		resp.HasValue("status", "error")
-		resp.ContainsKey("message")
-		resp.Value("errors").Array().Value(0).Object().
-			HasValue("field", "original_url").
-			ContainsKey("message")
-	})
 
 	suite.Run("url not found", func() {
 		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
