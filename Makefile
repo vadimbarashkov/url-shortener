@@ -9,7 +9,7 @@ GOARCH=amd64
 GOOS=linux
 
 .PHONY: all
-all: clean tidy fmt lint mock test/unit build run
+all: clean tidy fmt lint test/unit build run
 
 .PHONY: tidy
 tidy:
@@ -81,7 +81,7 @@ migrations/down:
 	migrate -database $(DATABASE_DSN) -path $(MIGRATIONS_DIR) down -all
 
 .PHONY: ci
-ci: tidy fmt build lint mock test/unit test/integration clean
+ci: tidy fmt build lint test/unit test/integration clean
 
 .PHONY: git/push
 git/push: ci
