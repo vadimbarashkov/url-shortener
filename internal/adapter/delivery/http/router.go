@@ -1,9 +1,6 @@
 package http
 
 import (
-	"fmt"
-	"net/http"
-
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
@@ -45,9 +42,4 @@ func NewRouter(logger *httplog.Logger, urlUseCase urlUseCase) *chi.Mux {
 	})
 
 	return r
-}
-
-func handlePing(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, "pong")
 }

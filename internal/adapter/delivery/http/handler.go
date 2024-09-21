@@ -3,10 +3,12 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"time"
+	"reflect"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v2"
@@ -14,6 +16,11 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/vadimbarashkov/url-shortener/internal/entity"
 )
+
+func handlePing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, "pong")
+}
 
 type urlUseCase interface {
 	ShortenURL(ctx context.Context, originalURL string) (*entity.URL, error)
@@ -23,25 +30,20 @@ type urlUseCase interface {
 	GetURLStats(ctx context.Context, shortCode string) (*entity.URL, error)
 }
 
-type urlRequest struct {
-	OriginalURL string `json:"original_url" validate:"required,url"`
-}
-
-type urlResponse struct {
-	ID          int64     `json:"id"`
-	ShortCode   string    `json:"short_code"`
-	OriginalURL string    `json:"original_url"`
-	AccessCount *int64    `json:"access_count,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-}
-
 type urlHandler struct {
 	useCase  urlUseCase
 	validate *validator.Validate
 }
 
 func newURLHandler(useCase urlUseCase, validate *validator.Validate) *urlHandler {
+	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
+		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
+		if name == "-" {
+			return ""
+		}
+		return name
+	})
+
 	return &urlHandler{
 		useCase:  useCase,
 		validate: validate,
@@ -54,27 +56,18 @@ func (h *urlHandler) shortenURL(w http.ResponseWriter, r *http.Request) {
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		if errors.Is(err, io.EOF) {
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": "empty request body",
-			})
+			render.JSON(w, r, emptyRequestBodyResponse)
 			return
 		}
 
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "invalid request body",
-		})
+		render.JSON(w, r, invalidRequestBodyResponse)
 		return
 	}
 
 	if err := h.validate.Struct(req); err != nil {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "invalid values",
-		})
+		render.JSON(w, r, validationErrorResponse(err))
 		return
 	}
 
@@ -83,23 +76,12 @@ func (h *urlHandler) shortenURL(w http.ResponseWriter, r *http.Request) {
 		httplog.LogEntrySetField(r.Context(), "err", slog.AnyValue(err))
 
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "server error",
-		})
+		render.JSON(w, r, serverErrorResponse)
 		return
 	}
 
-	resp := urlResponse{
-		ID:          url.ID,
-		ShortCode:   url.ShortCode,
-		OriginalURL: url.OriginalURL,
-		CreatedAt:   url.CreatedAt,
-		UpdatedAt:   url.UpdatedAt,
-	}
-
 	render.Status(r, http.StatusCreated)
-	render.JSON(w, r, resp)
+	render.JSON(w, r, toURLResponse(url))
 }
 
 func (h *urlHandler) resolveShortCode(w http.ResponseWriter, r *http.Request) {
@@ -109,33 +91,19 @@ func (h *urlHandler) resolveShortCode(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, entity.ErrURLNotFound) {
 			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			render.JSON(w, r, urlNotFoundResponse)
 			return
 		}
 
 		httplog.LogEntrySetField(r.Context(), "err", slog.AnyValue(err))
 
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "server error",
-		})
+		render.JSON(w, r, serverErrorResponse)
 		return
 	}
 
-	resp := urlResponse{
-		ID:          url.ID,
-		ShortCode:   url.ShortCode,
-		OriginalURL: url.OriginalURL,
-		CreatedAt:   url.CreatedAt,
-		UpdatedAt:   url.UpdatedAt,
-	}
-
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, resp)
+	render.JSON(w, r, toURLResponse(url))
 }
 
 func (h *urlHandler) modifyURL(w http.ResponseWriter, r *http.Request) {
@@ -144,27 +112,18 @@ func (h *urlHandler) modifyURL(w http.ResponseWriter, r *http.Request) {
 	if err := render.DecodeJSON(r.Body, &req); err != nil {
 		if errors.Is(err, io.EOF) {
 			render.Status(r, http.StatusBadRequest)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": "empty request body",
-			})
+			render.JSON(w, r, emptyRequestBodyResponse)
 			return
 		}
 
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "invalid request body",
-		})
+		render.JSON(w, r, invalidRequestBodyResponse)
 		return
 	}
 
 	if err := h.validate.Struct(req); err != nil {
 		render.Status(r, http.StatusBadRequest)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "invalid values",
-		})
+		render.JSON(w, r, validationErrorResponse(err))
 		return
 	}
 
@@ -174,31 +133,17 @@ func (h *urlHandler) modifyURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, entity.ErrURLNotFound) {
 			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			render.JSON(w, r, urlNotFoundResponse)
 			return
 		}
 
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "server error",
-		})
+		render.JSON(w, r, serverErrorResponse)
 		return
 	}
 
-	resp := urlResponse{
-		ID:          url.ID,
-		ShortCode:   url.ShortCode,
-		OriginalURL: url.OriginalURL,
-		CreatedAt:   url.CreatedAt,
-		UpdatedAt:   url.UpdatedAt,
-	}
-
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, resp)
+	render.JSON(w, r, toURLResponse(url))
 }
 
 func (h *urlHandler) deactivateURL(w http.ResponseWriter, r *http.Request) {
@@ -208,18 +153,12 @@ func (h *urlHandler) deactivateURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, entity.ErrURLNotFound) {
 			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			render.JSON(w, r, urlNotFoundResponse)
 			return
 		}
 
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "server error",
-		})
+		render.JSON(w, r, serverErrorResponse)
 		return
 	}
 
@@ -233,30 +172,15 @@ func (h *urlHandler) getURLStats(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, entity.ErrURLNotFound) {
 			render.Status(r, http.StatusNotFound)
-			render.JSON(w, r, map[string]string{
-				"status":  "error",
-				"message": err.Error(),
-			})
+			render.JSON(w, r, urlNotFoundResponse)
 			return
 		}
 
 		render.Status(r, http.StatusInternalServerError)
-		render.JSON(w, r, map[string]string{
-			"status":  "error",
-			"message": "server error",
-		})
+		render.JSON(w, r, serverErrorResponse)
 		return
 	}
 
-	resp := urlResponse{
-		ID:          url.ID,
-		ShortCode:   url.ShortCode,
-		OriginalURL: url.OriginalURL,
-		AccessCount: &url.AccessCount,
-		CreatedAt:   url.CreatedAt,
-		UpdatedAt:   url.UpdatedAt,
-	}
-
 	render.Status(r, http.StatusOK)
-	render.JSON(w, r, resp)
+	render.JSON(w, r, toURLStatsResponse(url))
 }
