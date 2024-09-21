@@ -10,11 +10,6 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
-const (
-	defaultMaxRetries      = 5
-	defaultShortCodeLength = 7
-)
-
 var ErrMaxRetriesExceeded = errors.New("maximum retries exceeded for generating short code")
 
 type urlRepository interface {
@@ -45,18 +40,20 @@ type URLUseCase struct {
 	urlRepo         urlRepository
 }
 
+var defaultURLUseCase = URLUseCase{
+	maxRetries:      5,
+	shortCodeLength: 7,
+}
+
 func NewURLUseCase(urlRepo urlRepository, opts ...URLOption) *URLUseCase {
-	uc := &URLUseCase{
-		maxRetries:      defaultMaxRetries,
-		shortCodeLength: defaultShortCodeLength,
-		urlRepo:         urlRepo,
-	}
+	uc := defaultURLUseCase
+	uc.urlRepo = urlRepo
 
 	for _, opt := range opts {
-		opt(uc)
+		opt(&uc)
 	}
 
-	return uc
+	return &uc
 }
 
 func (uc *URLUseCase) ShortenURL(ctx context.Context, originalURL string) (*entity.URL, error) {
