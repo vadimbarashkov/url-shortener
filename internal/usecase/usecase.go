@@ -10,6 +10,11 @@ import (
 	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
+const (
+	defaultMaxRetries      = 5
+	defaultShortCodeLength = 7
+)
+
 var ErrMaxRetriesExceeded = errors.New("maximum retries exceeded for generating short code")
 
 type urlRepository interface {
@@ -20,24 +25,47 @@ type urlRepository interface {
 	Remove(ctx context.Context, shortCode string) error
 }
 
+type URLOption func(*URLUseCase)
+
+func WithMaxRetries(n int) URLOption {
+	return func(uc *URLUseCase) {
+		uc.maxRetries = n
+	}
+}
+
+func WithShortCodeLength(l int) URLOption {
+	return func(uc *URLUseCase) {
+		uc.shortCodeLength = l
+	}
+}
+
 type URLUseCase struct {
+	maxRetries      int
 	shortCodeLength int
 	urlRepo         urlRepository
 }
 
-func NewURLUseCase(shortCodeLength int, urlRepo urlRepository) *URLUseCase {
-	return &URLUseCase{
-		shortCodeLength: shortCodeLength,
+func NewURLUseCase(urlRepo urlRepository, opts ...URLOption) *URLUseCase {
+	uc := &URLUseCase{
+		maxRetries:      defaultMaxRetries,
+		shortCodeLength: defaultShortCodeLength,
 		urlRepo:         urlRepo,
 	}
+
+	for _, opt := range opts {
+		opt(uc)
+	}
+
+	return uc
 }
 
 func (uc *URLUseCase) ShortenURL(ctx context.Context, originalURL string) (*entity.URL, error) {
 	const op = "usecase.URLUseCase.ShortenURL"
-	const maxRetries = 5
 
-	for i := 0; i < maxRetries; i++ {
-		shortCode, err := gonanoid.New(uc.shortCodeLength)
+	shortCodeLength := uc.shortCodeLength
+
+	for i := 0; i < uc.maxRetries; i++ {
+		shortCode, err := gonanoid.New(shortCodeLength)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed to generate short code: %w", op, err)
 		}
@@ -45,11 +73,7 @@ func (uc *URLUseCase) ShortenURL(ctx context.Context, originalURL string) (*enti
 		url, err := uc.urlRepo.Save(ctx, shortCode, originalURL)
 		if err != nil {
 			if errors.Is(err, entity.ErrShortCodeExists) {
-				uc.shortCodeLength++
-				defer func() {
-					uc.shortCodeLength--
-				}()
-
+				shortCodeLength++
 				continue
 			}
 
