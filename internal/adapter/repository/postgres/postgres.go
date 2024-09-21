@@ -19,7 +19,7 @@ func isUniqueViolationError(err error) bool {
 	return ok && pgErr.SQLState() == uniqueViolationErrCode
 }
 
-type URL struct {
+type urlDB struct {
 	ID          int64     `db:"id"`
 	ShortCode   string    `db:"short_code"`
 	OriginalURL string    `db:"original_url"`
@@ -28,7 +28,7 @@ type URL struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
-func (u *URL) toEntity() *entity.URL {
+func (u *urlDB) toEntity() *entity.URL {
 	return &entity.URL{
 		ID:          u.ID,
 		ShortCode:   u.ShortCode,
@@ -53,7 +53,7 @@ func (r *URLRepository) Save(ctx context.Context, shortCode, originalURL string)
 	const op = "adapter.repository.postgres.URLRepository.Save"
 	const query = `INSERT INTO urls(short_code, original_url) VALUES ($1, $2) RETURNING *`
 
-	var url URL
+	var url urlDB
 
 	if err := r.db.GetContext(ctx, &url, query, shortCode, originalURL); err != nil {
 		if isUniqueViolationError(err) {
@@ -70,7 +70,7 @@ func (r *URLRepository) RetrieveByShortCode(ctx context.Context, shortCode strin
 	const op = "adapter.repository.postgres.URLRepository.RetrieveByShortCode"
 	const query = `SELECT * FROM urls WHERE short_code = $1`
 
-	var url URL
+	var url urlDB
 
 	if err := r.db.GetContext(ctx, &url, query, shortCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -87,7 +87,7 @@ func (r *URLRepository) RetrieveAndUpdateStats(ctx context.Context, shortCode st
 	const op = "adapter.repository.postgres.URLRepository.RetrieveAndUpdateStats"
 	const query = `UPDATE urls SET access_count = access_count + 1 WHERE short_code = $1 RETURNING *`
 
-	var url URL
+	var url urlDB
 
 	if err := r.db.GetContext(ctx, &url, query, shortCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -104,7 +104,7 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 	const op = "adapter.repository.postgres.URLRepository.Update"
 	const query = `UPDATE urls SET original_url = $1 WHERE short_code = $2 RETURNING *`
 
-	var url URL
+	var url urlDB
 
 	if err := r.db.GetContext(ctx, &url, query, originalURL, shortCode); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
