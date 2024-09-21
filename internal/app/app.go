@@ -14,21 +14,14 @@ import (
 	"github.com/vadimbarashkov/url-shortener/pkg/postgres"
 	"golang.org/x/sync/errgroup"
 
-	api "github.com/vadimbarashkov/url-shortener/internal/adapter/delivery/http"
+	delivery "github.com/vadimbarashkov/url-shortener/internal/adapter/delivery/http"
 	repo "github.com/vadimbarashkov/url-shortener/internal/adapter/repository/postgres"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
 	const op = "app.Run"
 
-	db, err := postgres.New(
-		ctx,
-		cfg.Postgres.DSN(),
-		postgres.WithConnMaxIdleTime(cfg.Postgres.ConnMaxIdleTime),
-		postgres.WithConnMaxLifetime(cfg.Postgres.ConnMaxLifetime),
-		postgres.WithMaxIdleConns(cfg.Postgres.MaxIdleConns),
-		postgres.WithMaxOpenConns(cfg.Postgres.MaxOpenConns),
-	)
+	db, err := postgres.New(ctx, cfg.Postgres.DSN())
 	if err != nil {
 		return fmt.Errorf("%s: failed to connect to database: %w", op, err)
 	}
@@ -39,10 +32,10 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	}
 
 	urlRepo := repo.NewURLRepository(db)
-	urlUseCase := usecase.NewURLUseCase(cfg.ShortCodeLength, urlRepo)
+	urlUseCase := usecase.NewURLUseCase(urlRepo)
 
 	logger := setupLogger(cfg.Env)
-	r := api.NewRouter(logger, urlUseCase)
+	r := delivery.NewRouter(logger, urlUseCase)
 
 	server := &http.Server{
 		Addr:           cfg.HTTPServer.Addr(),
@@ -102,8 +95,6 @@ func setupLogger(env string) *httplog.Logger {
 	case config.EnvProd:
 		opt.LogLevel = slog.LevelInfo
 		opt.JSON = true
-	default:
-		env = config.EnvDev
 	}
 
 	logger := httplog.NewLogger("url-shortener", opt)
