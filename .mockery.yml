@@ -1,0 +1,9 @@
+with-expecter: true
+packages:
+  github.com/vadimbarashkov/url-shortener/internal/usecase:
+    interfaces:
+      urlRepository:
+        config:
+          dir: "mocks/{{ .PackageName }}"
+          filename: "{{ .PackageName }}.go"
+          mockname: "Mock{{ .InterfaceName | camelcase }}"
