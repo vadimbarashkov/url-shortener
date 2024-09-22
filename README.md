@@ -93,7 +93,10 @@ Here are the main components of the application:
 
 ## API Documentation
 
-The application is documented using Swagger and you can explore it using various UI tools.
+The application is documented using Swagger. You can explore the API using various tools or access the interactive Swagger UI by running the application and using these links:
+
+- [Swagger UI for dev and stage environments](http://localhost:8080/swagger/index.html)
+- [Swagger UI for the prod environment](https://localhost:8443/swagger/index.html)
 
 ## Running Tests
 

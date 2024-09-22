@@ -4,11 +4,14 @@
 package http
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/cors"
 	"github.com/go-chi/httplog/v2"
 	"github.com/go-playground/validator/v10"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 // NewRouter initializes and returns a new Chi router configured with middleware and routes for the URL shortener API.
@@ -26,6 +29,14 @@ func NewRouter(logger *httplog.Logger, urlUseCase urlUseCase) *chi.Mux {
 	r.Use(middleware.RealIP)
 	r.Use(httplog.RequestLogger(logger))
 	r.Use(middleware.Recoverer)
+
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/docs/swagger.yml"),
+	))
+
+	r.Get("/docs/swagger.yml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./docs/swagger.yml")
+	})
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/ping", handlePing)
