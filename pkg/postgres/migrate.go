@@ -10,6 +10,7 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
+// RunMigrations applies the database migrations from the specified path using the provided Data Source Name (DSN).
 func RunMigrations(path string, dsn string) error {
 	const op = "postgres.RunMigrations"
 

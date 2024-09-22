@@ -1,3 +1,6 @@
+// Package postgres implements the persistence layer for URL entities in a PostgreSQL database.
+// It defines the URLRepository struct, which provides methods to store, retrieve, update, and delete URLs
+// as well as updating access statistics. The package interacts with PostgreSQL using the sqlx library.
 package postgres
 
 import (
@@ -14,11 +17,14 @@ import (
 
 const uniqueViolationErrCode = "23505"
 
+// isUniqueViolationError checks if an error is a PostgreSQL unique constraint violation.
+// This is used to detect cases where a short code already exists in the database.
 func isUniqueViolationError(err error) bool {
 	pgErr, ok := err.(*pgconn.PgError)
 	return ok && pgErr.SQLState() == uniqueViolationErrCode
 }
 
+// urlDB is a representation of a URL entity in the database. It maps to the columns in the `urls` table.
 type urlDB struct {
 	ID          int64     `db:"id"`
 	ShortCode   string    `db:"short_code"`
@@ -28,6 +34,7 @@ type urlDB struct {
 	UpdatedAt   time.Time `db:"updated_at"`
 }
 
+// toEntity converts a urlDB struct to the entity URL.
 func (u *urlDB) toEntity() *entity.URL {
 	return &entity.URL{
 		ID:          u.ID,
@@ -41,14 +48,19 @@ func (u *urlDB) toEntity() *entity.URL {
 	}
 }
 
+// URLRepository provides methods to interact with the PostgreSQL database for URL management.
+// It is responsible for saving, retrieving, updating, and removing URLs from the database.
 type URLRepository struct {
 	db *sqlx.DB
 }
 
+// NewURLRepository creates a new instance of URLRepository using the provided sqlx.DB instance.
 func NewURLRepository(db *sqlx.DB) *URLRepository {
 	return &URLRepository{db: db}
 }
 
+// Save inserts a new URL into the database with the provided short code and original URL.
+// If a short code already exists, it returns an entity.ErrShortCodeExists error.
 func (r *URLRepository) Save(ctx context.Context, shortCode, originalURL string) (*entity.URL, error) {
 	const op = "adapter.repository.postgres.URLRepository.Save"
 	const query = `INSERT INTO urls(short_code, original_url) VALUES ($1, $2) RETURNING *`
@@ -66,6 +78,8 @@ func (r *URLRepository) Save(ctx context.Context, shortCode, originalURL string)
 	return url.toEntity(), nil
 }
 
+// RetrieveByShortCode retrieves a URL from the database based on the provided short code.
+// If the short code is not found, it returns an entity.ErrURLNotFound error.
 func (r *URLRepository) RetrieveByShortCode(ctx context.Context, shortCode string) (*entity.URL, error) {
 	const op = "adapter.repository.postgres.URLRepository.RetrieveByShortCode"
 	const query = `SELECT * FROM urls WHERE short_code = $1`
@@ -83,6 +97,8 @@ func (r *URLRepository) RetrieveByShortCode(ctx context.Context, shortCode strin
 	return url.toEntity(), nil
 }
 
+// RetrieveAndUpdateStats retrieves a URL from the database by its short code and increments its access count.
+// If the short code is not found, it returns an entity.ErrURLNotFound error.
 func (r *URLRepository) RetrieveAndUpdateStats(ctx context.Context, shortCode string) (*entity.URL, error) {
 	const op = "adapter.repository.postgres.URLRepository.RetrieveAndUpdateStats"
 	const query = `UPDATE urls SET access_count = access_count + 1 WHERE short_code = $1 RETURNING *`
@@ -100,6 +116,8 @@ func (r *URLRepository) RetrieveAndUpdateStats(ctx context.Context, shortCode st
 	return url.toEntity(), nil
 }
 
+// Update modifies the original URL associated with the provided short code.
+// If the short code is not found, it returns an entity.ErrURLNotFound error.
 func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL string) (*entity.URL, error) {
 	const op = "adapter.repository.postgres.URLRepository.Update"
 	const query = `UPDATE urls SET original_url = $1 WHERE short_code = $2 RETURNING *`
@@ -117,6 +135,8 @@ func (r *URLRepository) Update(ctx context.Context, shortCode, originalURL strin
 	return url.toEntity(), nil
 }
 
+// Remove deletes a URL from the database based on the provided short code.
+// If the short code is not found, it returns an entity.ErrURLNotFound error.
 func (r *URLRepository) Remove(ctx context.Context, shortCode string) error {
 	const op = "adapter.repository.postgres.URLRepository.Remove"
 	const query = `DELETE FROM urls WHERE short_code = $1`

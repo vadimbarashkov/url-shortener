@@ -17,11 +17,15 @@ import (
 	"github.com/vadimbarashkov/url-shortener/internal/entity"
 )
 
+// handlePing handles the ping request and responds with "pong".
+// This is a simple health check endpoint.
 func handlePing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, "pong")
 }
 
+// urlUseCase defines the methods required for URL shortening and management.
+// It abstracts the business logic needed for handling URLs.
 type urlUseCase interface {
 	ShortenURL(ctx context.Context, originalURL string) (*entity.URL, error)
 	ResolveShortCode(ctx context.Context, shortCode string) (*entity.URL, error)
@@ -30,11 +34,13 @@ type urlUseCase interface {
 	GetURLStats(ctx context.Context, shortCode string) (*entity.URL, error)
 }
 
+// urlHandler handles HTTP requests related to URLs.
 type urlHandler struct {
 	useCase  urlUseCase
 	validate *validator.Validate
 }
 
+// newURLHandler creates a new instance of urlHandler with the provided use case and validator.
 func newURLHandler(useCase urlUseCase, validate *validator.Validate) *urlHandler {
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]
@@ -50,6 +56,7 @@ func newURLHandler(useCase urlUseCase, validate *validator.Validate) *urlHandler
 	}
 }
 
+// shortenURL handles the request to shorten a URL.
 func (h *urlHandler) shortenURL(w http.ResponseWriter, r *http.Request) {
 	var req urlRequest
 
@@ -84,6 +91,7 @@ func (h *urlHandler) shortenURL(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, toURLResponse(url))
 }
 
+// resolveShortCode handles the request to resolve a shortened URL.
 func (h *urlHandler) resolveShortCode(w http.ResponseWriter, r *http.Request) {
 	shortCode := chi.URLParam(r, "shortCode")
 
@@ -106,6 +114,7 @@ func (h *urlHandler) resolveShortCode(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, toURLResponse(url))
 }
 
+// modifyURL handles the request to modify an existing shortened URL.
 func (h *urlHandler) modifyURL(w http.ResponseWriter, r *http.Request) {
 	var req urlRequest
 
@@ -146,6 +155,7 @@ func (h *urlHandler) modifyURL(w http.ResponseWriter, r *http.Request) {
 	render.JSON(w, r, toURLResponse(url))
 }
 
+// deactivateURL handles the request to deactivate a shortened URL.
 func (h *urlHandler) deactivateURL(w http.ResponseWriter, r *http.Request) {
 	shortCode := chi.URLParam(r, "shortCode")
 
@@ -165,6 +175,7 @@ func (h *urlHandler) deactivateURL(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// getURLStats handles the request to retrieve statistics for a shortened URL.
 func (h *urlHandler) getURLStats(w http.ResponseWriter, r *http.Request) {
 	shortCode := chi.URLParam(r, "shortCode")
 

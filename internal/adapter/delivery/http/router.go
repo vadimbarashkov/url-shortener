@@ -1,3 +1,6 @@
+// Package http provides the HTTP delivery layer for the URL shortener service.
+// This package contains the HTTP handlers and related types used for processing
+// incoming requests, validating input, and formatting responses.
 package http
 
 import (
@@ -8,6 +11,7 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+// NewRouter initializes and returns a new Chi router configured with middleware and routes for the URL shortener API.
 func NewRouter(logger *httplog.Logger, urlUseCase urlUseCase) *chi.Mux {
 	r := chi.NewRouter()
 

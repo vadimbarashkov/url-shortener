@@ -18,6 +18,8 @@ import (
 	repo "github.com/vadimbarashkov/url-shortener/internal/adapter/repository/postgres"
 )
 
+// Run initializes and starts the HTTP server with the given configuration.
+// It connects to the PostgreSQL database, applies migrations, sets up the URL use case, and starts the server.
 func Run(ctx context.Context, cfg *config.Config) error {
 	const op = "app.Run"
 
@@ -81,6 +83,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	return g.Wait()
 }
 
+// setupLogger configures and returns an httplog.Logger based on the provided environment.
 func setupLogger(env string) *httplog.Logger {
 	opt := httplog.Options{
 		LogLevel:        slog.LevelDebug,

@@ -9,10 +9,12 @@ import (
 
 const statusError = "error"
 
+// urlRequest represents the structure for a request to shorten or modifying a URL.
 type urlRequest struct {
 	OriginalURL string `json:"original_url" validate:"required,url"`
 }
 
+// urlResponse represents the structure for a response containing shortened URL information.
 type urlResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
@@ -21,6 +23,7 @@ type urlResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// toURLResponse converts an entity.URL to a urlResponse.
 func toURLResponse(url *entity.URL) urlResponse {
 	return urlResponse{
 		ID:          url.ID,
@@ -31,6 +34,7 @@ func toURLResponse(url *entity.URL) urlResponse {
 	}
 }
 
+// urlStatsResponse represents the structure for a response containing URL statistics.
 type urlStatsResponse struct {
 	ID          int64     `json:"id"`
 	ShortCode   string    `json:"short_code"`
@@ -40,10 +44,12 @@ type urlStatsResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+// urlStats represents the statistics for a URL.
 type urlStats struct {
 	AccessCount int64 `json:"access_count"`
 }
 
+// toURLStatsResponse converts an entity.URL to a urlStatsResponse.
 func toURLStatsResponse(url *entity.URL) urlStatsResponse {
 	return urlStatsResponse{
 		ID:          url.ID,
@@ -57,37 +63,43 @@ func toURLStatsResponse(url *entity.URL) urlStatsResponse {
 	}
 }
 
+// validationError represents an individual validation error.
 type validationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 }
 
+// errorResponse represents a structured error response.
 type errorResponse struct {
 	Status  string            `json:"status"`
 	Message string            `json:"message"`
 	Errors  []validationError `json:"errors,omitempty"`
 }
 
-var emptyRequestBodyResponse = errorResponse{
-	Status:  statusError,
-	Message: "empty request body",
-}
+// Predefined error responses for common scenarios.
+var (
+	emptyRequestBodyResponse = errorResponse{
+		Status:  statusError,
+		Message: "empty request body",
+	}
 
-var invalidRequestBodyResponse = errorResponse{
-	Status:  statusError,
-	Message: "invalid request body",
-}
+	invalidRequestBodyResponse = errorResponse{
+		Status:  statusError,
+		Message: "invalid request body",
+	}
 
-var urlNotFoundResponse = errorResponse{
-	Status:  statusError,
-	Message: "url not found",
-}
+	urlNotFoundResponse = errorResponse{
+		Status:  statusError,
+		Message: "url not found",
+	}
 
-var serverErrorResponse = errorResponse{
-	Status:  statusError,
-	Message: "server error occurred",
-}
+	serverErrorResponse = errorResponse{
+		Status:  statusError,
+		Message: "server error occurred",
+	}
+)
 
+// messageForTag returns a user-friendly message based on the validation tag.
 func messageForTag(tag string) string {
 	switch tag {
 	case "required":
@@ -99,6 +111,7 @@ func messageForTag(tag string) string {
 	}
 }
 
+// getValidationErrors processes validation errors and returns a list of validationError.
 func getValidationErrors(err error) []validationError {
 	var validationErrs []validationError
 
@@ -115,6 +128,7 @@ func getValidationErrors(err error) []validationError {
 	return validationErrs
 }
 
+// validationErrorResponse constructs an errorResponse for validation errors.
 func validationErrorResponse(err error) errorResponse {
 	return errorResponse{
 		Status:  statusError,
