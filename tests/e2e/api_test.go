@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,40 +11,23 @@ import (
 	"github.com/gavv/httpexpect/v2"
 	"github.com/jmoiron/sqlx"
 	"github.com/stretchr/testify/suite"
+	"github.com/vadimbarashkov/url-shortener/internal/adapter/repository/postgres"
 	"github.com/vadimbarashkov/url-shortener/internal/config"
+	"github.com/vadimbarashkov/url-shortener/tests"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func findProjectRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-
-	return "", os.ErrNotExist
-}
-
 type APITestSuite struct {
 	suite.Suite
-	cfg *config.Config
-	db  *sqlx.DB
-	e   *httpexpect.Expect
+	cfg     *config.Config
+	db      *sqlx.DB
+	urlRepo *postgres.URLRepository
+	e       *httpexpect.Expect
 }
 
 func (suite *APITestSuite) SetupSuite() {
-	root, err := findProjectRoot()
+	root, err := tests.FindProjectRoot()
 	if err != nil {
 		suite.T().Fatalf("Failed to get project root: %v", err)
 	}
@@ -63,11 +47,13 @@ func (suite *APITestSuite) SetupSuite() {
 		suite.db.Close()
 	})
 
-	baseURL := fmt.Sprintf("http://localhost:%d", suite.cfg.Server.Port)
+	suite.urlRepo = postgres.NewURLRepository(suite.db)
+
+	baseURL := fmt.Sprintf("http://localhost:%d", suite.cfg.HTTPServer.Port)
 	suite.e = httpexpect.Default(suite.T(), baseURL)
 }
 
-func (suite *APITestSuite) TearDownSuite() {
+func (suite *APITestSuite) TearDownSubTest() {
 	_, err := suite.db.Exec(`TRUNCATE TABLE urls RESTART IDENTITY CASCADE`)
 	if err != nil {
 		suite.T().Fatalf("Failed to clean urls table: %v", err)
@@ -81,7 +67,7 @@ func (suite *APITestSuite) TestPing() {
 		suite.e.GET(path).
 			Expect().
 			Status(http.StatusOK).
-			Text().IsEqual("pong\n")
+			Text().IsEqual("pong")
 	})
 }
 
@@ -109,48 +95,41 @@ func (suite *APITestSuite) TestShortenURL() {
 		resp.ContainsKey("message")
 	})
 
-	suite.Run("invalid url value", func() {
+	suite.Run("validation error", func() {
 		resp := suite.e.POST(path).
-			WithJSON(map[string]string{
-				"url": "invalid url",
-			}).
+			WithJSON(map[string]string{"original_url": "invalid url"}).
 			Expect().
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
 		resp.HasValue("status", "error")
 		resp.ContainsKey("message")
-		resp.Value("details").Array().Value(0).Object().
-			HasValue("field", "url").
-			HasValue("value", "invalid url").
-			ContainsKey("issue")
+		resp.Value("errors").Array().Value(0).Object().
+			HasValue("field", "original_url").
+			ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
 		resp := suite.e.POST(path).
-			WithJSON(map[string]string{
-				"url": "https://example.com",
-			}).
+			WithJSON(map[string]string{"original_url": "https://example.com"}).
 			Expect().
 			Status(http.StatusCreated).
 			JSON().Object()
 
-		resp.HasValue("status", "success")
-		resp.ContainsKey("message")
-		resp.Value("data").Object().
-			ContainsKey("id").
-			ContainsKey("short_code").
-			HasValue("url", "https://example.com").
-			ContainsKey("created_at").
-			ContainsKey("updated_at")
+		resp.ContainsKey("id")
+		resp.ContainsKey("short_code")
+		resp.HasValue("original_url", "https://example.com")
+		resp.NotContainsKey("stats")
+		resp.ContainsKey("created_at")
+		resp.ContainsKey("updated_at")
 	})
 }
 
 func (suite *APITestSuite) TestResolveShortCode() {
-	const path = "/api/v1/shorten/%s"
+	path := "/api/v1/shorten/%s"
 
 	suite.Run("url not found", func() {
-		resp := suite.e.GET(path, "abc123").
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
 			JSON().Object()
@@ -160,30 +139,22 @@ func (suite *APITestSuite) TestResolveShortCode() {
 	})
 
 	suite.Run("success", func() {
-		resp := suite.e.POST("/api/v1/shorten").
-			WithJSON(map[string]string{
-				"url": "https://example.com",
-			}).
-			Expect().
-			Status(http.StatusCreated).
-			JSON().Object()
+		url, err := suite.urlRepo.Save(context.Background(), "abc123", "https://example.com")
+		if err != nil {
+			suite.T().Fatalf("Failed to save url record: %v", err)
+		}
 
-		data := resp.Value("data").Object()
-		shortCode := data.Value("short_code").String().Raw()
-
-		resp = suite.e.GET(fmt.Sprintf(path, shortCode)).
+		resp := suite.e.GET(fmt.Sprintf(path, url.ShortCode)).
 			Expect().
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", "success")
-		resp.ContainsKey("message")
-		resp.Value("data").Object().
-			ContainsKey("id").
-			HasValue("short_code", shortCode).
-			HasValue("url", "https://example.com").
-			ContainsKey("created_at").
-			ContainsKey("updated_at")
+		resp.HasValue("id", url.ID)
+		resp.HasValue("short_code", url.ShortCode)
+		resp.HasValue("original_url", url.OriginalURL)
+		resp.NotContainsKey("stats")
+		resp.HasValue("created_at", url.CreatedAt)
+		resp.ContainsKey("updated_at")
 	})
 }
 
@@ -211,63 +182,49 @@ func (suite *APITestSuite) TestModifyURL() {
 		resp.ContainsKey("message")
 	})
 
-	suite.Run("invalid url value", func() {
+	suite.Run("validation error", func() {
 		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
-			WithJSON(map[string]string{
-				"url": "invalid url",
-			}).
+			WithJSON(map[string]string{"original_url": "invalid url"}).
 			Expect().
 			Status(http.StatusBadRequest).
 			JSON().Object()
 
 		resp.HasValue("status", "error")
 		resp.ContainsKey("message")
-		resp.Value("details").Array().Value(0).Object().
-			HasValue("field", "url").
-			HasValue("value", "invalid url").
-			ContainsKey("issue")
+		resp.Value("errors").Array().Value(0).Object().
+			HasValue("field", "original_url").
+			ContainsKey("message")
 	})
 
 	suite.Run("url not found", func() {
 		resp := suite.e.PUT(fmt.Sprintf(path, "abc123")).
-			WithJSON(map[string]string{
-				"url": "https://new-example.com",
-			}).
+			WithJSON(map[string]string{"original_url": "https://new-example.com"}).
 			Expect().
 			Status(http.StatusNotFound).
 			JSON().Object()
+
 		resp.HasValue("status", "error")
 		resp.ContainsKey("message")
 	})
 
 	suite.Run("success", func() {
-		resp := suite.e.POST("/api/v1/shorten").
-			WithJSON(map[string]string{
-				"url": "https://example.com",
-			}).
-			Expect().
-			Status(http.StatusCreated).
-			JSON().Object()
+		url, err := suite.urlRepo.Save(context.Background(), "abc123", "https://example.com")
+		if err != nil {
+			suite.T().Fatalf("Failed to save url record: %v", err)
+		}
 
-		data := resp.Value("data").Object()
-		shortCode := data.Value("short_code").String().Raw()
-
-		resp = suite.e.PUT(fmt.Sprintf(path, shortCode)).
-			WithJSON(map[string]string{
-				"url": "https://new-example.com",
-			}).
+		resp := suite.e.PUT(fmt.Sprintf(path, url.ShortCode)).
+			WithJSON(map[string]string{"original_url": "https://new-example.com"}).
 			Expect().
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", "success")
-		resp.ContainsKey("message")
-		resp.Value("data").Object().
-			ContainsKey("id").
-			HasValue("short_code", shortCode).
-			HasValue("url", "https://new-example.com").
-			ContainsKey("created_at").
-			ContainsKey("updated_at")
+		resp.HasValue("id", url.ID)
+		resp.HasValue("short_code", url.ShortCode)
+		resp.HasValue("original_url", "https://new-example.com")
+		resp.NotContainsKey("stats")
+		resp.HasValue("created_at", url.CreatedAt)
+		resp.ContainsKey("updated_at")
 	})
 }
 
@@ -275,7 +232,7 @@ func (suite *APITestSuite) TestDeactivateURL() {
 	const path = "/api/v1/shorten/%s"
 
 	suite.Run("url not found", func() {
-		resp := suite.e.DELETE(path, "abc123").
+		resp := suite.e.DELETE(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
 			JSON().Object()
@@ -285,32 +242,22 @@ func (suite *APITestSuite) TestDeactivateURL() {
 	})
 
 	suite.Run("success", func() {
-		resp := suite.e.POST("/api/v1/shorten").
-			WithJSON(map[string]string{
-				"url": "https://example.com",
-			}).
+		url, err := suite.urlRepo.Save(context.Background(), "abc123", "https://example.com")
+		if err != nil {
+			suite.T().Fatalf("Failed to save url record: %v", err)
+		}
+
+		suite.e.DELETE(fmt.Sprintf(path, url.ShortCode)).
 			Expect().
-			Status(http.StatusCreated).
-			JSON().Object()
-
-		data := resp.Value("data").Object()
-		shortCode := data.Value("short_code").String().Raw()
-
-		resp = suite.e.DELETE(fmt.Sprintf(path, shortCode)).
-			Expect().
-			Status(http.StatusOK).
-			JSON().Object()
-
-		resp.HasValue("status", "success")
-		resp.ContainsKey("message")
+			Status(http.StatusNoContent)
 	})
 }
 
 func (suite *APITestSuite) TestGetURLStats() {
-	const path = "/api/v1/shorten/%s/stats"
+	path := "/api/v1/shorten/%s/stats"
 
 	suite.Run("url not found", func() {
-		resp := suite.e.GET(path, "abc123").
+		resp := suite.e.GET(fmt.Sprintf(path, "abc123")).
 			Expect().
 			Status(http.StatusNotFound).
 			JSON().Object()
@@ -320,31 +267,23 @@ func (suite *APITestSuite) TestGetURLStats() {
 	})
 
 	suite.Run("success", func() {
-		resp := suite.e.POST("/api/v1/shorten").
-			WithJSON(map[string]string{
-				"url": "https://example.com",
-			}).
-			Expect().
-			Status(http.StatusCreated).
-			JSON().Object()
+		url, err := suite.urlRepo.Save(context.Background(), "abc123", "https://example.com")
+		if err != nil {
+			suite.T().Fatalf("Failed to save url record: %v", err)
+		}
 
-		data := resp.Value("data").Object()
-		shortCode := data.Value("short_code").String().Raw()
-
-		resp = suite.e.GET(fmt.Sprintf(path, shortCode)).
+		resp := suite.e.GET(fmt.Sprintf(path, url.ShortCode)).
 			Expect().
 			Status(http.StatusOK).
 			JSON().Object()
 
-		resp.HasValue("status", "success")
-		resp.ContainsKey("message")
-		resp.Value("data").Object().
-			ContainsKey("id").
-			HasValue("short_code", shortCode).
-			HasValue("url", "https://example.com").
-			HasValue("access_count", int64(0)).
-			ContainsKey("created_at").
-			ContainsKey("updated_at")
+		resp.HasValue("id", url.ID)
+		resp.HasValue("short_code", url.ShortCode)
+		resp.HasValue("original_url", url.OriginalURL)
+		resp.Value("stats").Object().
+			HasValue("access_count", int64(0))
+		resp.HasValue("created_at", url.CreatedAt)
+		resp.ContainsKey("updated_at")
 	})
 }
 

@@ -23,6 +23,10 @@ fmt:
 lint:
 	golangci-lint run ./...
 
+.PHONY: mock
+mock:
+	mockery
+
 .PHONY: test/unit
 test/unit:
 	go test -cover -race ./internal/... ./pkg/...

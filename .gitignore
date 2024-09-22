@@ -6,6 +6,8 @@
 !go.sum
 !go.mod
 
+!.mockery.yml
+
 !README.md
 !LICENSE
 
