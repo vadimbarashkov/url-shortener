@@ -17,4 +17,8 @@
 !/migrations/*
 !/docs/*
 
+!/.dockerignore
+!/docker-compose.yml
+!Dockerfile
+
 !*/
