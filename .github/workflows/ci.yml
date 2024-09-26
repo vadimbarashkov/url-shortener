@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - feature/**
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: Build binary
+        run: go build -v ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60
+          args: --timeout=30m
+
+  test:
+    runs-on: ubuntu-latest
+    env:
+      CONFIG_PATH: ./configs/stage.yml
+      POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+      POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: Run unit tests
+        run: go test -cover -race ./internal/... ./pkg/...
+
+      - name: Run integration tests
+        run: go test -cover -race ./tests/integration/...
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Generate config file
+        run: |
+          mkdir -p "$(dirname ${{ env.CONFIG_PATH }})" && > {{ env.CONFIG_PATH }}
+          echo ${{ secrets.STAGE_CONFIG }} > ${{ env.CONFIG_PATH }}
+
+      - name: Run docker compose
+        run: docker compose -f ./docker-compose.yml up -d
+
+      - name: Run e2e tests
+        run: go test -cover -race ./tests/e2e/...
+
+      - name: Shutdown docker compose
+        run: docker compose -f ./docker-compose.yml down
