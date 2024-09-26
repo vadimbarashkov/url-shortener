@@ -39,6 +39,8 @@ func (suite *APITestSuite) SetupSuite() {
 		suite.T().Fatalf("Failed to load config: %v", err)
 	}
 
+	suite.T().Logf("Postgres DSN: %s", suite.cfg.Postgres.DSN())
+
 	suite.db, err = sqlx.Connect("pgx", suite.cfg.Postgres.DSN())
 	if err != nil {
 		suite.T().Fatalf("Failed to connect to database: %v", err)
