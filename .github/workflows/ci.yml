@@ -104,6 +104,20 @@ jobs:
       - name: Run docker compose
         run: docker compose -f ./docker-compose.yml up -d
 
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for all services to be healthy..."
+          retries=30
+          while ! docker compose -f ./docker-compose.yml ps | grep -q '(healthy)'; do
+            retries=$((retries-1))
+            if [ $retries -le 0 ]; then
+              echo "Services did not become healthy in time"
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "All services are healthy."
+
       - name: List containers
         run: docker compose -f ./docker-compose.yml ps
 
