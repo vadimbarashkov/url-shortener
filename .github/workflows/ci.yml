@@ -104,8 +104,8 @@ jobs:
       - name: Run docker compose
         run: docker compose -f ./docker-compose.yml up -d
 
+      - name: List containers
+        run: docker compose -f ./docker-compose.yml ps
+
       - name: Run e2e tests
         run: go test -cover -race ./tests/e2e/...
-
-      - name: Shutdown docker compose
-        run: docker compose -f ./docker-compose.yml down
