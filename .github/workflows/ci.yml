@@ -63,6 +63,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CONFIG_PATH: ./configs/stage.yml
+      STAGE_CONFIG: ${{ secrets.STAGE_CONFIG }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
@@ -97,8 +98,8 @@ jobs:
 
       - name: Generate config file
         run: |
-          mkdir -p "$(dirname ${{ env.CONFIG_PATH }})" && > ${{ env.CONFIG_PATH }}
-          printf "%s" "${{ secrets.STAGE_CONFIG }}" > ${{ env.CONFIG_PATH }}
+          mkdir -p "$(dirname ${CONFIG_PATH})" && > ${CONFIG_PATH}
+          printf "%s" "${STAGE_CONFIG}" > ${CONFIG_PATH}
 
       - name: Run docker compose
         run: docker compose -f ./docker-compose.yml up -d
