@@ -98,7 +98,7 @@ jobs:
       - name: Generate config file
         run: |
           mkdir -p "$(dirname ${{ env.CONFIG_PATH }})" && > ${{ env.CONFIG_PATH }}
-          echo "${{ secrets.STAGE_CONFIG }}" > ${{ env.CONFIG_PATH }}
+          printf "%s" "${{ secrets.STAGE_CONFIG }}" > ${{ env.CONFIG_PATH }}
 
       - name: Run docker compose
         run: docker compose -f ./docker-compose.yml up -d
