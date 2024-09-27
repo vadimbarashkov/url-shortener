@@ -75,17 +75,52 @@ Here are the main components of the application:
 
 ### Using Docker
 
-1. Build and start the services:
+1. Set environment variables:
 
     ```bash
-    docker-compose up --build
+    export POSTGRES_USER=postgres
+    export POSTGRES_PASSWORD=postgres
+    export POSTGRES_DB=url_shortener
+    export CONFIG_PATH=./configs/dev.yml
+    ```
+
+2. Prepare config file:
+
+    ```yaml
+    # ./configs/dev.yml
+
+    env: dev
+
+    postgres:
+      user: postgres
+      password: postgres
+      db: url_shortener
+    ```
+
+3. Build and start the services:
+
+    ```bash
+    docker-compose up -d --build
     ```
 
 ### Without Docker
 
 1. Setup PostgreSQL.
 
-2. Run the application:
+2. Prepare config file:
+
+    ```yaml
+    # ./configs/dev.yml
+
+    env: dev
+
+    postgres:
+      user: postgres
+      password: postgres
+      db: url_shortener
+    ```
+
+3. Run the application:
 
     ```bash
     CONFIG_PATH=./configs/dev.yml make all
