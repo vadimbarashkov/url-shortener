@@ -49,7 +49,11 @@ func (suite *APITestSuite) SetupSuite() {
 
 	suite.urlRepo = postgres.NewURLRepository(suite.db)
 
-	baseURL := fmt.Sprintf("http://localhost:%d", suite.cfg.HTTPServer.Port)
+	baseURL, ok := os.LookupEnv("BASE_URL")
+	if !ok {
+		baseURL = fmt.Sprintf("http://localhost:%d", suite.cfg.HTTPServer.Port)
+	}
+
 	suite.e = httpexpect.Default(suite.T(), baseURL)
 }
 
