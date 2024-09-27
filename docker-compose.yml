@@ -1,0 +1,35 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: always
+    ports:
+      - ${POSTGRES_PORT:-5432}:5432
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER?err}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD?err}
+      - POSTGRES_DB=${POSTGRES_DB?err}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      retries: 5
+
+  app:
+    build: .
+    restart: always
+    ports:
+      - ${HTTP_SERVER_PORT:-8080}:${HTTP_SERVER_PORT:-8080}
+    environment:
+      - CONFIG_PATH=${CONFIG_PATH?err}
+    volumes:
+      - ./configs:/configs
+      - ./crts:/crts
+      - ./docs:/docs
+      - ./migrations:/migrations
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pg-data:

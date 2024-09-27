@@ -1,0 +1,26 @@
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS urls(
+    id BIGINT GENERATED ALWAYS AS IDENTITY,
+    short_code VARCHAR(50) NOT NULL UNIQUE,
+    original_url TEXT NOT NULL,
+    access_count BIGINT DEFAULT 0 CHECK (access_count >= 0),
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(id)
+);
+
+CREATE OR REPLACE FUNCTION update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER urls_update_updated_at
+BEFORE UPDATE ON urls
+FOR EACH ROW
+EXECUTE FUNCTION update_timestamp();
+
+END;

@@ -6,9 +6,19 @@
 !go.sum
 !go.mod
 
+!.mockery.yml
+
 !README.md
 !LICENSE
 
 !Makefile
+
+!/.github/**
+!/migrations/*
+!/docs/*
+
+!/.dockerignore
+!/docker-compose.yml
+!Dockerfile
 
 !*/
